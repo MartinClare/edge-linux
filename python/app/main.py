@@ -701,39 +701,66 @@ async def detect_video_file_endpoint(
 
 # --- app.config.json sync (for ppe-ui Settings) ---
 def _app_config_paths():
-    """Project root and ppe-ui/public app.config.json paths."""
+    """Paths to keep app.config.json in sync across services."""
     root = Path(__file__).resolve().parent.parent.parent
-    return root / "app.config.json", root / "ppe-ui" / "public" / "app.config.json"
+    return (
+        root / "app.config.json",
+        root / "python" / "app.config.json",
+        root / "ppe-ui" / "public" / "app.config.json",
+        root / "ppe-ui" / "build" / "app.config.json",
+    )
 
 
 @app.put("/api/config")
 async def update_app_config(request: Request):
     """
     Update app.config.json from ppe-ui Settings.
-    Body: { "rtsp": { "cameras": [{"id","name","url","enabled"}], "fpsLimit", "geminiInterval", "autoStart" } }
-    Merges into existing config and writes to project root and ppe-ui/public.
+        Body supports:
+        {
+          "rtsp": { "cameras": [...], "fpsLimit", "geminiInterval", "autoStart" },
+          "centralServer": { "enabled", "url", "apiKey" },
+          "vpn": { "enabled", "interface", "provider" },
+          "network": { ... }
+        }
+    Merges into existing config and writes to all config copies.
     """
     try:
         body = await request.json()
-        rtsp = body.get("rtsp")
-        if not rtsp or "cameras" not in rtsp:
-            raise HTTPException(status_code=400, detail="Body must include rtsp.cameras")
-        path_root, path_public = _app_config_paths()
+        path_root, *_ = _app_config_paths()
         config = {}
         if path_root.exists():
             with open(path_root, "r", encoding="utf-8") as f:
                 config = json.load(f)
-        if "rtsp" not in config:
-            config["rtsp"] = {}
-        config["rtsp"]["cameras"] = rtsp["cameras"]
-        if "fpsLimit" in rtsp:
-            config["rtsp"]["fpsLimit"] = rtsp["fpsLimit"]
-        if "geminiInterval" in rtsp:
-            config["rtsp"]["geminiInterval"] = rtsp["geminiInterval"]
-        if "autoStart" in rtsp:
-            config["rtsp"]["autoStart"] = rtsp["autoStart"]
+
+        rtsp = body.get("rtsp")
+        if rtsp is not None:
+            if "cameras" not in rtsp:
+                raise HTTPException(status_code=400, detail="rtsp.cameras is required when rtsp is provided")
+            if "rtsp" not in config:
+                config["rtsp"] = {}
+            config["rtsp"]["cameras"] = rtsp["cameras"]
+            if "fpsLimit" in rtsp:
+                config["rtsp"]["fpsLimit"] = rtsp["fpsLimit"]
+            if "geminiInterval" in rtsp:
+                config["rtsp"]["geminiInterval"] = rtsp["geminiInterval"]
+            if "autoStart" in rtsp:
+                config["rtsp"]["autoStart"] = rtsp["autoStart"]
+
+        if "centralServer" in body:
+            config["centralServer"] = body["centralServer"]
+        if "vpn" in body:
+            config["vpn"] = body["vpn"]
+        if "network" in body:
+            config["network"] = body["network"]
+
+        if rtsp is None and "centralServer" not in body and "vpn" not in body and "network" not in body:
+            raise HTTPException(
+                status_code=400,
+                detail="Request must include at least one of: rtsp, centralServer, vpn, network",
+            )
+
         out = json.dumps(config, indent=2, ensure_ascii=False)
-        for p in (path_root, path_public):
+        for p in _app_config_paths():
             p.parent.mkdir(parents=True, exist_ok=True)
             with open(p, "w", encoding="utf-8") as f:
                 f.write(out)
