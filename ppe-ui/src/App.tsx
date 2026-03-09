@@ -788,24 +788,6 @@ function App() {
                       setGeminiResult(result);
                       setCurrentAnalysisCameraId(cameraId);
                       setCurrentAnalysisCameraName(cameraName);
-                      if (result) {
-                        fetch('http://localhost:8000/alarms/process-analysis', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            camera_id: cameraId,
-                            camera_name: cameraName,
-                            overallDescription: result.overallDescription,
-                            overallRiskLevel: result.overallRiskLevel,
-                            peopleCount: result.peopleCount ?? 0,
-                            missingHardhats: result.missingHardhats ?? 0,
-                            missingVests: result.missingVests ?? 0,
-                            constructionSafety: result.constructionSafety,
-                            fireSafety: result.fireSafety,
-                            propertySecurity: result.propertySecurity,
-                          }),
-                        }).catch(err => console.warn('[App] Failed to forward Gemini result to alarm observer:', err));
-                      }
                     }}
                     onAlertResult={(cameraId: string, cameraName: string, result: AlertAnalysisResult | null) => {
                       console.log(`[App] Alert result from camera: ${cameraName} (${cameraId})`, result);

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 import cv2
 import numpy as np
+import requests
 from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, FileResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -66,6 +67,130 @@ app.add_middleware(CORSHeaderMiddleware)
 # Include alarm routes
 app.include_router(alarm_router)
 
+_deepvision_task: Optional[asyncio.Task] = None
+_deepvision_camera_index: int = 0
+
+
+def _load_runtime_config() -> dict:
+    cfg_path = Path(__file__).resolve().parent.parent / "app.config.json"
+    if not cfg_path.exists():
+        return {}
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as exc:
+        logger.warning(f"Failed to load app.config.json: {exc}")
+        return {}
+
+
+def _capture_jpeg_from_rtsp(rtsp_url: str) -> Optional[bytes]:
+    cap = None
+    try:
+        cap = open_video_capture(rtsp_url)
+        ret, frame = cap.read()
+        if not ret or frame is None:
+            return None
+        ok, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+        if not ok:
+            return None
+        return encoded.tobytes()
+    except Exception as exc:
+        logger.debug(f"Deep Vision frame capture failed for {rtsp_url}: {exc}")
+        return None
+    finally:
+        try:
+            if cap is not None:
+                cap.release()
+        except Exception:
+            pass
+
+
+def _analyze_with_cloud(frame_jpeg: bytes) -> Optional[dict]:
+    try:
+        resp = requests.post(
+            "http://127.0.0.1:3001/api/analyze-image",
+            files={"image": ("frame.jpg", frame_jpeg, "image/jpeg")},
+            data={"language": "en"},
+            timeout=45,
+        )
+        if not resp.ok:
+            logger.warning(f"Deep Vision cloud call failed: HTTP {resp.status_code}")
+            return None
+        body = resp.json()
+        if not body.get("success"):
+            logger.warning(f"Deep Vision cloud returned error: {body.get('error')}")
+            return None
+        return body.get("data")
+    except Exception as exc:
+        logger.warning(f"Deep Vision cloud call error: {exc}")
+        return None
+
+
+def _build_alarm_payload(camera_id: str, camera_name: str, result: dict) -> dict:
+    """
+    Keep backend CMP payload 1:1 with previous PPE-UI forwarding shape.
+    """
+    return {
+        "camera_id": camera_id,
+        "camera_name": camera_name,
+        "overallDescription": result.get("overallDescription"),
+        "overallRiskLevel": result.get("overallRiskLevel", "Low"),
+        "peopleCount": result.get("peopleCount", 0) or 0,
+        "missingHardhats": result.get("missingHardhats", 0) or 0,
+        "missingVests": result.get("missingVests", 0) or 0,
+        "constructionSafety": result.get("constructionSafety") or {},
+        "fireSafety": result.get("fireSafety") or {},
+        "propertySecurity": result.get("propertySecurity") or {},
+    }
+
+
+async def _deepvision_background_loop():
+    global _deepvision_camera_index
+    logger.info("Deep Vision background loop started")
+    while True:
+        try:
+            cfg = _load_runtime_config()
+            ui_cfg = cfg.get("ui", {}) if isinstance(cfg, dict) else {}
+            rtsp_cfg = cfg.get("rtsp", {}) if isinstance(cfg, dict) else {}
+            deepvision_enabled = ui_cfg.get("deepVisionEnabled", True)
+            interval = int(rtsp_cfg.get("geminiInterval", 5) or 5)
+            interval = max(1, interval)
+
+            if not deepvision_enabled:
+                await asyncio.sleep(interval)
+                continue
+
+            cameras = rtsp_cfg.get("cameras", [])
+            enabled_cameras = [c for c in cameras if isinstance(c, dict) and c.get("enabled") and c.get("url")]
+            if not enabled_cameras:
+                await asyncio.sleep(interval)
+                continue
+
+            camera = enabled_cameras[_deepvision_camera_index % len(enabled_cameras)]
+            _deepvision_camera_index += 1
+            camera_id = camera.get("id", f"camera{_deepvision_camera_index}")
+            camera_name = camera.get("name", camera_id)
+            rtsp_url = camera.get("url", "")
+
+            frame_jpeg = await asyncio.to_thread(_capture_jpeg_from_rtsp, rtsp_url)
+            if not frame_jpeg:
+                await asyncio.sleep(1)
+                continue
+
+            analysis_result = await asyncio.to_thread(_analyze_with_cloud, frame_jpeg)
+            if analysis_result:
+                payload = _build_alarm_payload(camera_id, camera_name, analysis_result)
+                observer = get_alarm_observer()
+                await asyncio.to_thread(observer.process_analysis_result, payload, camera_id, camera_name)
+
+            await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            logger.info("Deep Vision background loop stopped")
+            raise
+        except Exception as exc:
+            logger.error(f"Deep Vision background loop error: {exc}", exc_info=True)
+            await asyncio.sleep(2)
+
 # Load model at startup
 @app.on_event("startup")
 async def startup_event():
@@ -86,9 +211,23 @@ async def startup_event():
         observer = get_alarm_observer(central_server_config=central_server_cfg)
         observer.start_monitoring()
         logger.info("Alarm observer started successfully")
+        global _deepvision_task
+        if _deepvision_task is None or _deepvision_task.done():
+            _deepvision_task = asyncio.create_task(_deepvision_background_loop())
     except Exception as exc:
         logger.error(f"Failed to start alarm observer: {exc}", exc_info=True)
 
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global _deepvision_task
+    if _deepvision_task and not _deepvision_task.done():
+        _deepvision_task.cancel()
+        try:
+            await _deepvision_task
+        except asyncio.CancelledError:
+            pass
 
 
 @app.get("/")
