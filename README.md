@@ -69,6 +69,33 @@ Adjust paths and `User`/`Group` in the service files to match your install.
 - **Gemini / OpenRouter**: If the API is geo-blocked, use a VPN (e.g. Mullvad WireGuard) so traffic from the device exits in a supported region.
 - **LAN access**: The built UI rewrites `localhost` to the current hostname so it works when opened from another machine on the network.
 
+## Remote access (Tailscale)
+
+Tailscale gives stable remote access even when the 5G public IP changes after reboot.
+
+- Install Tailscale on both this edge device and your Windows PC.
+- Log both devices into the same Tailscale account/tailnet.
+- Keep `tailscaled` enabled on boot:
+
+```bash
+sudo systemctl enable --now tailscaled
+sudo tailscale up --ssh
+```
+
+Once connected, access by Tailscale IP or DNS name (from Windows):
+
+```bash
+ssh admin@<tailscale-ip>
+ssh admin@<device-name>.<tailnet-name>.ts.net
+```
+
+Web access over Tailscale:
+
+- UI: `http://<tailscale-ip>:3000`
+- Backend API: `http://<tailscale-ip>:8000`
+
+This works across reboots and 5G IP changes as long as both devices are online and logged into Tailscale.
+
 ## License
 
 See repository or project documentation.
