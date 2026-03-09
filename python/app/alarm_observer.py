@@ -9,6 +9,10 @@ import logging
 import threading
 import subprocess
 import platform
+import os
+import hmac
+import hashlib
+import base64
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
@@ -523,13 +527,50 @@ class AlarmObserver:
             },
         }
 
+        def _b64url(data: bytes) -> str:
+            return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+        def _load_jwt_secret() -> str:
+            secret = os.getenv("JWT_SECRET", "").strip()
+            if secret:
+                return secret
+            # Fallback: read cloud/.env when service env is minimal
+            try:
+                root = Path(__file__).resolve().parent.parent.parent
+                env_path = root / "cloud" / ".env"
+                if env_path.exists():
+                    for line in env_path.read_text(encoding="utf-8").splitlines():
+                        if line.startswith("JWT_SECRET="):
+                            val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                            if val:
+                                return val
+            except Exception as exc:
+                logger.warning(f"Unable to read JWT_SECRET from .env: {exc}")
+            return ""
+
+        def _generate_jwt(secret: str) -> str:
+            now = int(time.time())
+            header = {"typ": "JWT", "alg": "HS256"}
+            claims = {"sub": "edge-device", "iat": now, "exp": now + 3600}
+            header_b64 = _b64url(json.dumps(header, separators=(",", ":"), ensure_ascii=True).encode("utf-8"))
+            claims_b64 = _b64url(json.dumps(claims, separators=(",", ":"), ensure_ascii=True).encode("utf-8"))
+            signing_input = f"{header_b64}.{claims_b64}".encode("ascii")
+            signature = hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
+            sig_b64 = _b64url(signature)
+            return f"{header_b64}.{claims_b64}.{sig_b64}"
+
         def _do_send() -> None:
+            jwt_secret = _load_jwt_secret()
+            auth_token = _generate_jwt(jwt_secret) if jwt_secret else ""
             for attempt in range(retry_attempts):
                 try:
+                    headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+                    if auth_token:
+                        headers["Authorization"] = f"Bearer {auth_token}"
                     resp = requests.post(
                         url,
                         json=payload,
-                        headers={"X-API-Key": api_key, "Content-Type": "application/json"},
+                        headers=headers,
                         timeout=30,
                     )
                     if resp.ok:

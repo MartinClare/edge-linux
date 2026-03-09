@@ -26,6 +26,14 @@ import type {
 import './App.css';
 
 function App() {
+  interface AppConfig {
+    ui?: {
+      defaultInputSource?: InputSource;
+      defaultAnalysisMode?: AnalysisMode;
+      deepVisionEnabled?: boolean;
+    };
+  }
+
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
     () => sessionStorage.getItem('vd2_auth') === 'true'
   );
@@ -53,10 +61,18 @@ function App() {
   useEffect(() => {
     fetch('/app.config.json')
       .then(res => res.json())
-      .then(config => {
+      .then((config: AppConfig) => {
         console.log('[App] Loaded configuration:', config);
         if (config.ui?.defaultInputSource) {
           setInputSource(config.ui.defaultInputSource);
+        }
+        if (config.ui?.deepVisionEnabled === false) {
+          setAnalysisMode('yolo');
+        } else if (config.ui?.defaultAnalysisMode) {
+          setAnalysisMode(config.ui.defaultAnalysisMode);
+        } else {
+          // Default behavior: Deep Vision ON unless explicitly disabled in app.config.json
+          setAnalysisMode('gemini');
         }
       })
       .catch(err => {

@@ -23,6 +23,10 @@ interface VpnConfig {
 }
 
 interface AppConfig {
+  ui?: {
+    defaultAnalysisMode?: AnalysisMode;
+    deepVisionEnabled?: boolean;
+  };
   rtsp: {
     cameras: CameraConfig[];
     fpsLimit: number;
@@ -151,41 +155,6 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
   }, [onAlertResult, enabledCameras, cameraNames]);
 
   useEffect(() => {
-    // Load edited URLs and settings from localStorage
-    const savedUrls = localStorage.getItem('cameraUrls');
-    if (savedUrls) {
-      try {
-        setCameraUrls(JSON.parse(savedUrls));
-        console.log('[MultiCamera] Loaded saved camera URLs from localStorage');
-      } catch (e) {
-        console.error('[MultiCamera] Failed to parse saved URLs:', e);
-      }
-    }
-
-    const savedNames = localStorage.getItem('cameraNames');
-    if (savedNames) {
-      try {
-        setCameraNames(JSON.parse(savedNames));
-        console.log('[MultiCamera] Loaded saved camera names from localStorage');
-      } catch (e) {
-        console.error('[MultiCamera] Failed to parse saved names:', e);
-      }
-    }
-
-    const savedEnabled = localStorage.getItem('cameraEnabled');
-    if (savedEnabled) {
-      try {
-        setCameraEnabled(JSON.parse(savedEnabled));
-        console.log('[MultiCamera] Loaded saved camera enabled states from localStorage');
-      } catch (e) {
-        console.error('[MultiCamera] Failed to parse saved enabled states:', e);
-      }
-    }
-
-    const savedFps = localStorage.getItem('fpsLimit');
-    const savedInterval = localStorage.getItem('geminiInterval');
-    const savedAutoStart = localStorage.getItem('autoStart');
-
     fetch('/app.config.json')
       .then(res => res.json())
       .then((data: AppConfig) => {
@@ -196,10 +165,10 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
         setEnabledCameras(allCameras);
         console.log(`[MultiCamera] ${allCameras.length} camera(s) configured`);
 
-        // Use saved settings or config defaults
-        setFpsLimit(savedFps ? Number(savedFps) : data.rtsp.fpsLimit);
-        setGeminiInterval(savedInterval ? Number(savedInterval) : data.rtsp.geminiInterval);
-        setAutoStart(savedAutoStart ? savedAutoStart === 'true' : data.rtsp.autoStart);
+        // app.config.json is source-of-truth for runtime settings
+        setFpsLimit(data.rtsp.fpsLimit);
+        setGeminiInterval(data.rtsp.geminiInterval);
+        setAutoStart(data.rtsp.autoStart);
       })
       .catch(err => {
         console.error('[MultiCamera] Failed to load configuration:', err);
@@ -214,6 +183,7 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
     fpsLimit: number; 
     geminiInterval: number; 
     autoStart: boolean;
+    deepVisionEnabled: boolean;
     centralServer: CentralServerConfig;
     vpn: VpnConfig;
   }) => {
@@ -225,6 +195,11 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
     setAutoStart(settings.autoStart);
     setConfig(prev => prev ? {
       ...prev,
+      ui: {
+        ...(prev.ui || {}),
+        deepVisionEnabled: settings.deepVisionEnabled,
+        defaultAnalysisMode: settings.deepVisionEnabled ? 'gemini' : 'yolo',
+      },
       centralServer: settings.centralServer,
       vpn: settings.vpn,
     } : prev);
@@ -840,6 +815,7 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
           configFpsLimit={config.rtsp.fpsLimit}
           configGeminiInterval={config.rtsp.geminiInterval}
           configAutoStart={config.rtsp.autoStart}
+          configDeepVisionEnabled={config.ui?.deepVisionEnabled !== false}
           configCmpEnabled={config.centralServer?.enabled ?? false}
           configCmpUrl={config.centralServer?.url ?? ''}
           configCmpApiKey={config.centralServer?.apiKey ?? ''}

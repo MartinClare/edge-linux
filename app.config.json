@@ -6,7 +6,9 @@
       "enableWebcam": false,
       "enableRTSP": true
     },
-    "defaultInputSource": "rtsp"
+    "defaultInputSource": "rtsp",
+    "defaultAnalysisMode": "gemini",
+    "deepVisionEnabled": true
   },
   "rtsp": {
     "cameras": [

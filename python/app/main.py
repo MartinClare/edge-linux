@@ -71,7 +71,19 @@ app.include_router(alarm_router)
 async def startup_event():
     load_model()  # logs a warning and returns None on RK3576 (stub)
     try:
-        observer = get_alarm_observer()
+        central_server_cfg = {}
+        # Load central server webhook settings from app.config.json for alarm observer forwarding.
+        try:
+            cfg_path = Path(__file__).resolve().parent.parent / "app.config.json"
+            if cfg_path.exists():
+                with open(cfg_path, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    if isinstance(cfg.get("centralServer"), dict):
+                        central_server_cfg = cfg["centralServer"]
+        except Exception as cfg_exc:
+            logger.warning(f"Could not load centralServer config: {cfg_exc}")
+
+        observer = get_alarm_observer(central_server_config=central_server_cfg)
         observer.start_monitoring()
         logger.info("Alarm observer started successfully")
     except Exception as exc:
@@ -752,11 +764,18 @@ async def update_app_config(request: Request):
             config["vpn"] = body["vpn"]
         if "network" in body:
             config["network"] = body["network"]
+        if "ui" in body:
+            if not isinstance(config.get("ui"), dict):
+                config["ui"] = {}
+            if isinstance(body["ui"], dict):
+                config["ui"].update(body["ui"])
+            else:
+                config["ui"] = body["ui"]
 
-        if rtsp is None and "centralServer" not in body and "vpn" not in body and "network" not in body:
+        if rtsp is None and "centralServer" not in body and "vpn" not in body and "network" not in body and "ui" not in body:
             raise HTTPException(
                 status_code=400,
-                detail="Request must include at least one of: rtsp, centralServer, vpn, network",
+                detail="Request must include at least one of: rtsp, centralServer, vpn, network, ui",
             )
 
         out = json.dumps(config, indent=2, ensure_ascii=False)

@@ -14,6 +14,7 @@ interface AppSettings {
   fpsLimit: number;
   geminiInterval: number;
   autoStart: boolean;
+  deepVisionEnabled: boolean;
   centralServer: {
     enabled: boolean;
     url: string;
@@ -31,6 +32,7 @@ interface SettingsModalProps {
   configFpsLimit: number;
   configGeminiInterval: number;
   configAutoStart: boolean;
+  configDeepVisionEnabled: boolean;
   configCmpEnabled: boolean;
   configCmpUrl: string;
   configCmpApiKey: string;
@@ -46,6 +48,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   configFpsLimit,
   configGeminiInterval,
   configAutoStart,
+  configDeepVisionEnabled,
   configCmpEnabled,
   configCmpUrl,
   configCmpApiKey,
@@ -61,6 +64,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [fpsLimit, setFpsLimit] = useState(configFpsLimit);
   const [geminiInterval, setGeminiInterval] = useState(configGeminiInterval);
   const [autoStart, setAutoStart] = useState(configAutoStart);
+  const [deepVisionEnabled, setDeepVisionEnabled] = useState(configDeepVisionEnabled);
   const [cmpEnabled, setCmpEnabled] = useState(configCmpEnabled);
   const [cmpUrl, setCmpUrl] = useState(configCmpUrl);
   const [cmpApiKey, setCmpApiKey] = useState(configCmpApiKey);
@@ -70,53 +74,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
-    // Load saved settings from localStorage
-    const savedUrls = localStorage.getItem('cameraUrls');
-    const savedEnabled = localStorage.getItem('cameraEnabled');
-    const savedFps = localStorage.getItem('fpsLimit');
-    const savedInterval = localStorage.getItem('geminiInterval');
-    const savedAutoStart = localStorage.getItem('autoStart');
-    const savedCmpEnabled = localStorage.getItem('cmpEnabled');
-    const savedCmpUrl = localStorage.getItem('cmpUrl');
-    const savedCmpApiKey = localStorage.getItem('cmpApiKey');
-    const savedVpnEnabled = localStorage.getItem('vpnEnabled');
-    const savedVpnInterface = localStorage.getItem('vpnInterface');
-    const savedVpnProvider = localStorage.getItem('vpnProvider');
-
-    if (savedUrls) {
-      try {
-        setCameraUrls(JSON.parse(savedUrls));
-      } catch (e) {
-        console.error('Failed to parse saved URLs:', e);
-      }
-    }
-
-    const savedNames = localStorage.getItem('cameraNames');
-    if (savedNames) {
-      try {
-        setCameraNames(JSON.parse(savedNames));
-      } catch (e) {
-        console.error('Failed to parse saved names:', e);
-      }
-    }
-
-    if (savedEnabled) {
-      try {
-        setCameraEnabled(JSON.parse(savedEnabled));
-      } catch (e) {
-        console.error('Failed to parse saved enabled states:', e);
-      }
-    }
-
-    if (savedFps) setFpsLimit(Number(savedFps));
-    if (savedInterval) setGeminiInterval(Number(savedInterval));
-    if (savedAutoStart) setAutoStart(savedAutoStart === 'true');
-    if (savedCmpEnabled) setCmpEnabled(savedCmpEnabled === 'true');
-    if (savedCmpUrl) setCmpUrl(savedCmpUrl);
-    if (savedCmpApiKey) setCmpApiKey(savedCmpApiKey);
-    if (savedVpnEnabled) setVpnEnabled(savedVpnEnabled === 'true');
-    if (savedVpnInterface) setVpnInterface(savedVpnInterface);
-    if (savedVpnProvider) setVpnProvider(savedVpnProvider);
+    // app.config.json is the source of truth; no localStorage overrides.
   }, []);
 
   const handleCameraUrlChange = (cameraId: string, url: string) => {
@@ -160,6 +118,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       fpsLimit,
       geminiInterval,
       autoStart,
+      deepVisionEnabled,
       centralServer: {
         enabled: cmpEnabled,
         url: cmpUrl.trim(),
@@ -171,20 +130,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         provider: vpnProvider.trim() || 'mullvad',
       },
     };
-
-    // Save to localStorage
-    localStorage.setItem('cameraUrls', JSON.stringify(cameraUrls));
-    localStorage.setItem('cameraNames', JSON.stringify(cameraNames));
-    localStorage.setItem('cameraEnabled', JSON.stringify(cameraEnabled));
-    localStorage.setItem('fpsLimit', String(fpsLimit));
-    localStorage.setItem('geminiInterval', String(geminiInterval));
-    localStorage.setItem('autoStart', String(autoStart));
-    localStorage.setItem('cmpEnabled', String(cmpEnabled));
-    localStorage.setItem('cmpUrl', cmpUrl);
-    localStorage.setItem('cmpApiKey', cmpApiKey);
-    localStorage.setItem('vpnEnabled', String(vpnEnabled));
-    localStorage.setItem('vpnInterface', vpnInterface);
-    localStorage.setItem('vpnProvider', vpnProvider);
 
     // Sync to app.config.json via Python backend
     const baseUrl = process.env.REACT_APP_YOLO_API_URL || 'http://localhost:8000';
@@ -199,6 +144,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         fpsLimit,
         geminiInterval,
         autoStart,
+      },
+      ui: {
+        deepVisionEnabled: settings.deepVisionEnabled,
+        defaultAnalysisMode: settings.deepVisionEnabled ? 'gemini' : 'yolo',
       },
       centralServer: settings.centralServer,
       vpn: settings.vpn,
@@ -223,25 +172,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleReset = () => {
     if (window.confirm('Reset all settings to defaults from config file?')) {
-      localStorage.removeItem('cameraUrls');
-      localStorage.removeItem('cameraNames');
-      localStorage.removeItem('cameraEnabled');
-      localStorage.removeItem('fpsLimit');
-      localStorage.removeItem('geminiInterval');
-      localStorage.removeItem('autoStart');
-      localStorage.removeItem('cmpEnabled');
-      localStorage.removeItem('cmpUrl');
-      localStorage.removeItem('cmpApiKey');
-      localStorage.removeItem('vpnEnabled');
-      localStorage.removeItem('vpnInterface');
-      localStorage.removeItem('vpnProvider');
-      
       setCameraUrls({});
       setCameraNames({});
       setCameraEnabled({});
       setFpsLimit(configFpsLimit);
       setGeminiInterval(configGeminiInterval);
       setAutoStart(configAutoStart);
+      setDeepVisionEnabled(configDeepVisionEnabled);
       setCmpEnabled(configCmpEnabled);
       setCmpUrl(configCmpUrl);
       setCmpApiKey(configCmpApiKey);
@@ -429,6 +366,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 </label>
                 <small style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginLeft: '1.5rem', display: 'block', marginTop: '0.25rem' }}>
                   Automatically connect to enabled cameras
+                </small>
+              </div>
+
+              <div style={{ paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  color: 'rgba(255,255,255,0.9)',
+                  fontSize: '0.9rem'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={deepVisionEnabled}
+                    onChange={(e) => {
+                      setDeepVisionEnabled(e.target.checked);
+                      setHasChanges(true);
+                    }}
+                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  />
+                  Deep Vision mode enabled by default
+                </label>
+                <small style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginLeft: '1.5rem', display: 'block', marginTop: '0.25rem' }}>
+                  If disabled, default mode falls back to Realtime Detection (YOLO)
                 </small>
               </div>
 
