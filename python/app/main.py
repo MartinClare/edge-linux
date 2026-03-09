@@ -69,6 +69,7 @@ app.include_router(alarm_router)
 
 _deepvision_task: Optional[asyncio.Task] = None
 _deepvision_camera_index: int = 0
+_latest_deepvision_results: dict[str, dict] = {}
 
 
 def _load_runtime_config() -> dict:
@@ -180,6 +181,21 @@ async def _deepvision_background_loop():
             analysis_result = await asyncio.to_thread(_analyze_with_cloud, frame_jpeg)
             if analysis_result:
                 payload = _build_alarm_payload(camera_id, camera_name, analysis_result)
+                _latest_deepvision_results[camera_id] = {
+                    "camera_id": camera_id,
+                    "camera_name": camera_name,
+                    "updated_at": time.time(),
+                    "analysis": {
+                        "overallDescription": payload.get("overallDescription", ""),
+                        "overallRiskLevel": payload.get("overallRiskLevel", "Low"),
+                        "peopleCount": payload.get("peopleCount", 0),
+                        "missingHardhats": payload.get("missingHardhats", 0),
+                        "missingVests": payload.get("missingVests", 0),
+                        "constructionSafety": payload.get("constructionSafety") or {"summary": "", "issues": [], "recommendations": []},
+                        "fireSafety": payload.get("fireSafety") or {"summary": "", "issues": [], "recommendations": []},
+                        "propertySecurity": payload.get("propertySecurity") or {"summary": "", "issues": [], "recommendations": []},
+                    },
+                }
                 observer = get_alarm_observer()
                 await asyncio.to_thread(observer.process_analysis_result, payload, camera_id, camera_name)
 
@@ -265,6 +281,20 @@ async def root():
 async def health():
     """Health check endpoint."""
     return {"status": "healthy", "model_loaded": True}
+
+
+@app.get("/api/deepvision/latest")
+async def get_deepvision_latest():
+    """
+    Return latest backend Deep Vision results per camera.
+    This is the ground-truth pipeline used for CMP forwarding.
+    """
+    results = sorted(
+        list(_latest_deepvision_results.values()),
+        key=lambda item: item.get("updated_at", 0),
+        reverse=True,
+    )
+    return {"results": results}
 
 
 @app.post("/detect/image", response_model=ImageDetections)

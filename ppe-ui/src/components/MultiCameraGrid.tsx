@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import RTSPLiveStream from './RTSPLiveStream';
 import SettingsModal from './SettingsModal';
 import type { AnalysisMode, GeminiAnalysisResult, AlertAnalysisResult } from '../types/detection.types';
+import { YOLO_API_URL } from '../config/api';
 
 interface CameraConfig {
   id: string;
@@ -41,6 +42,13 @@ interface MultiCameraGridProps {
   analysisMode: AnalysisMode;
   onGeminiResult?: (cameraId: string, cameraName: string, result: GeminiAnalysisResult | null) => void;
   onAlertResult?: (cameraId: string, cameraName: string, result: AlertAnalysisResult | null) => void;
+}
+
+interface BackendDeepVisionResult {
+  camera_id: string;
+  camera_name?: string;
+  updated_at: number;
+  analysis: GeminiAnalysisResult;
 }
 
 const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
@@ -174,6 +182,46 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
         console.error('[MultiCamera] Failed to load configuration:', err);
       });
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const refreshBackendResults = async () => {
+      try {
+        const res = await fetch(`${YOLO_API_URL}/api/deepvision/latest`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const results: BackendDeepVisionResult[] = Array.isArray(data?.results) ? data.results : [];
+        if (!mounted || results.length === 0) return;
+
+        setCameraResults(prev => {
+          const next = { ...prev };
+          for (const item of results) {
+            if (!item?.camera_id || !item?.analysis) continue;
+            next[item.camera_id] = {
+              gemini: item.analysis,
+              alert: prev[item.camera_id]?.alert || null,
+            };
+          }
+          return next;
+        });
+
+        const latest = results[0];
+        const latestCamera = enabledCameras.find(c => c.id === latest.camera_id);
+        const latestCameraName = latest.camera_name || latestCamera?.name || latest.camera_id;
+        onGeminiResult?.(latest.camera_id, latestCameraName, latest.analysis);
+      } catch {
+        // Display-only poller; fail silently to avoid noisy UI.
+      }
+    };
+
+    refreshBackendResults();
+    const timer = setInterval(refreshBackendResults, 3000);
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, [onGeminiResult, enabledCameras]);
 
   // Save URL edit to localStorage
   const handleSettingsSave = (settings: { 
@@ -322,7 +370,7 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
           autoStart={autoStart}
           autoStartDelay={index * 500}
           analysisMode={analysisMode}
-          allowAnalysis={currentAnalysisCameraId === camera.id}
+          allowAnalysis={false}
           compact={!singleView && enabledCameras.length > 1}
           onGeminiResult={(result) => handleGeminiResult(camera.id, result)}
           onAlertResult={(result) => handleAlertResult(camera.id, result)}

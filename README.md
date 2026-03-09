@@ -69,6 +69,30 @@ Adjust paths and `User`/`Group` in the service files to match your install.
 - **Gemini / OpenRouter**: If the API is geo-blocked, use a VPN (e.g. Mullvad WireGuard) so traffic from the device exits in a supported region.
 - **LAN access**: The built UI rewrites `localhost` to the current hostname so it works when opened from another machine on the network.
 
+## Current deployed behavior (Mar 2026)
+
+- **Backend is ground truth for incident reporting**:
+  - Deep Vision analysis runs in the Python backend background loop.
+  - Backend sends analysis/incident reports to CMP via `alarm_observer`.
+  - PPE-UI is display/configuration only (UI no longer forwards incident reports to CMP directly).
+- **CMP payload includes full safety fields**:
+  - `overallDescription`, `overallRiskLevel`
+  - `constructionSafety`, `fireSafety`, `propertySecurity`
+  - `peopleCount`, `missingHardhats`, `missingVests`
+- **Config source of truth**:
+  - `app.config.json` controls cameras, CMP, VPN/network roles, and UI defaults.
+  - `ui.deepVisionEnabled` defaults to enabled unless explicitly set to `false`.
+- **Dual-LAN deployment model**:
+  - `eth2`: camera LAN (example static `192.168.100.254/24`, no gateway)
+  - `eth1`: internet/4G-5G uplink (default route, DHCP)
+  - Camera subnet route is pinned to `eth2` while internet/cloud traffic uses uplink/VPN.
+- **VPN + cloud dependency**:
+  - `wg-mullvad` is used for OpenRouter region access where required.
+  - `edge-cloud.service` depends on `wg-mullvad.service` so cloud analysis starts with VPN path ready.
+- **Boot persistence**:
+  - `wg-mullvad`, `edge-python`, `edge-cloud`, `edge-ui`, and `tailscaled` are expected to be enabled at boot.
+  - System should recover analysis + CMP forwarding automatically after reboot.
+
 ## Remote access (Tailscale)
 
 Tailscale gives stable remote access even when the 5G public IP changes after reboot.
