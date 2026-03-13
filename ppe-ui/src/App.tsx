@@ -13,6 +13,7 @@ import { detectImageYOLO, detectRTSPYOLO } from './services/yoloApi';
 import { analyzeImageGemini, analyzeImageAlerts } from './services/geminiApi';
 import { analyzeVideo } from './services/videoApi';
 import { analyzeVideoStreaming } from './services/videoStreamingApi';
+import { YOLO_API_URL } from './config/api';
 import type {
   InputSource,
   AnalysisMode,
@@ -59,7 +60,7 @@ function App() {
 
   // Load configuration and set defaults
   useEffect(() => {
-    fetch('/app.config.json')
+    fetch(`${YOLO_API_URL}/api/config`)
       .then(res => res.json())
       .then((config: AppConfig) => {
         console.log('[App] Loaded configuration:', config);

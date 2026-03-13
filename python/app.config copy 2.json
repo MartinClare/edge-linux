@@ -14,26 +14,26 @@
     "cameras": [
       {
         "id": "camera1",
-        "name": "site_b_07",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_07",
+        "name": "Lobby",
+        "url": "rtsp://admin:123456@192.168.40.101:554/Streaming/Channels/1",
         "enabled": true
       },
       {
         "id": "camera2",
-        "name": "site_b_08",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_08",
+        "name": "Front Door",
+        "url": "rtsp://admin:123456@192.168.100.2:554/Streaming/Channels/1",
         "enabled": true
       },
       {
         "id": "camera3",
         "name": "Exit 3",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_03",
+        "url": "rtsp://admin:123456@192.168.100.3:554/Streaming/Channels/1",
         "enabled": true
       },
       {
         "id": "camera4",
         "name": "Camera 4",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_04",
+        "url": "rtsp://admin:123456@192.168.100.4:554/Streaming/Channels/1",
         "enabled": true
       }
     ],

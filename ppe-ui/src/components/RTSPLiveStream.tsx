@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { analyzeImageGemini, analyzeImageAlerts } from '../services/geminiApi';
 import type { AnalysisMode, GeminiAnalysisResult, AlertAnalysisResult } from '../types/detection.types';
+import { YOLO_API_URL } from '../config/api';
 
 interface Detection {
   id: number;
@@ -597,7 +598,7 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
     }
 
     // Single camera mode: load from config file
-    fetch('/app.config.json')
+    fetch(`${YOLO_API_URL}/api/config`)
       .then(res => res.json())
       .then((data: AppConfig) => {
         console.log(`[RTSP-${cameraId}] Loaded configuration:`, data.rtsp);

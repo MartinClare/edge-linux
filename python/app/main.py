@@ -72,8 +72,13 @@ _deepvision_camera_index: int = 0
 _latest_deepvision_results: dict[str, dict] = {}
 
 
+def _root_app_config_path() -> Path:
+    # Single source of truth for runtime config.
+    return Path(__file__).resolve().parent.parent.parent / "app.config.json"
+
+
 def _load_runtime_config() -> dict:
-    cfg_path = Path(__file__).resolve().parent.parent / "app.config.json"
+    cfg_path = _root_app_config_path()
     if not cfg_path.exists():
         return {}
     try:
@@ -215,7 +220,7 @@ async def startup_event():
         central_server_cfg = {}
         # Load central server webhook settings from app.config.json for alarm observer forwarding.
         try:
-            cfg_path = Path(__file__).resolve().parent.parent / "app.config.json"
+            cfg_path = _root_app_config_path()
             if cfg_path.exists():
                 with open(cfg_path, "r", encoding="utf-8") as f:
                     cfg = json.load(f)
@@ -882,14 +887,30 @@ async def detect_video_file_endpoint(
 
 # --- app.config.json sync (for ppe-ui Settings) ---
 def _app_config_paths():
-    """Paths to keep app.config.json in sync across services."""
+    """Root config is authoritative; others are synced mirrors."""
     root = Path(__file__).resolve().parent.parent.parent
     return (
-        root / "app.config.json",
+        _root_app_config_path(),
         root / "python" / "app.config.json",
         root / "ppe-ui" / "public" / "app.config.json",
         root / "ppe-ui" / "build" / "app.config.json",
     )
+
+
+@app.get("/api/config")
+async def get_app_config():
+    """Return the authoritative root app.config.json."""
+    try:
+        path_root = _root_app_config_path()
+        if not path_root.exists():
+            raise HTTPException(status_code=404, detail="app.config.json not found")
+        with open(path_root, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to read app.config.json: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.put("/api/config")

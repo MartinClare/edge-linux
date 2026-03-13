@@ -163,7 +163,7 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
   }, [onAlertResult, enabledCameras, cameraNames]);
 
   useEffect(() => {
-    fetch('/app.config.json')
+    fetch(`${YOLO_API_URL}/api/config`)
       .then(res => res.json())
       .then((data: AppConfig) => {
         console.log('[MultiCamera] Loaded configuration:', data.rtsp);

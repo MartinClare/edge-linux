@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { InputSource, AnalysisMode } from '../types/detection.types';
+import { YOLO_API_URL } from '../config/api';
 
 interface InputPanelProps {
   onSourceChange: (source: InputSource) => void;
@@ -33,7 +34,7 @@ const InputPanel: React.FC<InputPanelProps> = ({
 
   // Load configuration from root directory
   useEffect(() => {
-    fetch('/app.config.json')
+    fetch(`${YOLO_API_URL}/api/config`)
       .then(res => res.json())
       .then(data => {
         setConfig(data);
