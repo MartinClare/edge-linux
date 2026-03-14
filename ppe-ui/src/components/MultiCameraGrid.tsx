@@ -9,6 +9,8 @@ interface CameraConfig {
   name: string;
   url: string;
   enabled: boolean;
+  tailscaleUrl?: string;
+  useTailscale?: boolean;
 }
 
 interface CentralServerConfig {
@@ -34,7 +36,7 @@ interface AppConfig {
   };
   centralServer?: CentralServerConfig;
   vpn?: VpnConfig;
-  tailscale?: { enabled: boolean };
+  tailscale?: { enabled: boolean; mode?: 'inbound' | 'outbound' };
 }
 
 interface MultiCameraGridProps {
@@ -58,6 +60,8 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [enabledCameras, setEnabledCameras] = useState<CameraConfig[]>([]);
   const [cameraUrls, setCameraUrls] = useState<Record<string, string>>({}); // Track edited URLs
+  const [cameraTailscaleUrls, setCameraTailscaleUrls] = useState<Record<string, string>>({}); // Track edited tailscale URLs
+  const [cameraUseTailscale, setCameraUseTailscale] = useState<Record<string, boolean>>({}); // Track per-camera route selection
   const [cameraNames, setCameraNames] = useState<Record<string, string>>({}); // Track edited names
   const [cameraEnabled, setCameraEnabled] = useState<Record<string, boolean>>({}); // Track enabled states
   const [fpsLimit, setFpsLimit] = useState<number>(15);
@@ -225,6 +229,8 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
   // Save URL edit to localStorage
   const handleSettingsSave = (settings: { 
     cameraUrls: Record<string, string>;
+    cameraTailscaleUrls: Record<string, string>;
+    cameraUseTailscale: Record<string, boolean>;
     cameraNames: Record<string, string>;
     cameraEnabled: Record<string, boolean>;
     fpsLimit: number; 
@@ -233,9 +239,11 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
     deepVisionEnabled: boolean;
     centralServer: CentralServerConfig;
     vpn: VpnConfig;
-    tailscale: { enabled: boolean };
+    tailscale: { enabled: boolean; mode: 'inbound' | 'outbound' };
   }) => {
     setCameraUrls(settings.cameraUrls);
+    setCameraTailscaleUrls(settings.cameraTailscaleUrls);
+    setCameraUseTailscale(settings.cameraUseTailscale);
     setCameraNames(settings.cameraNames);
     setCameraEnabled(settings.cameraEnabled);
     setFpsLimit(settings.fpsLimit);
@@ -262,6 +270,26 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
     return cameraUrls[camera.id] || camera.url;
   };
 
+  // Get effective Tailscale URL (user edit or config default)
+  const getEffectiveTailscaleUrl = (camera: CameraConfig) => {
+    return cameraTailscaleUrls[camera.id] ?? camera.tailscaleUrl ?? '';
+  };
+
+  // Determine whether to use Tailscale path for this camera
+  const isUsingTailscalePath = (camera: CameraConfig) => {
+    return cameraUseTailscale[camera.id] !== undefined ? cameraUseTailscale[camera.id] : !!camera.useTailscale;
+  };
+
+  const getEffectiveStreamUrl = (camera: CameraConfig) => {
+    if (isUsingTailscalePath(camera)) {
+      const tsUrl = getEffectiveTailscaleUrl(camera).trim();
+      if (tsUrl) {
+        return tsUrl;
+      }
+    }
+    return getEffectiveUrl(camera);
+  };
+
   // Get effective name (user edit or config default)
   const getEffectiveName = (camera: CameraConfig) => {
     return cameraNames[camera.id] || camera.name;
@@ -275,7 +303,7 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
   const configCameras = config?.rtsp?.cameras ?? [];
 
   const renderStream = (camera: CameraConfig, index: number, singleView: boolean) => {
-    const effectiveUrl = getEffectiveUrl(camera);
+    const effectiveUrl = getEffectiveStreamUrl(camera);
     const effectiveEnabled = isEffectivelyEnabled(camera);
     const cameraResult = cameraResults[camera.id];
     const geminiResult = cameraResult?.gemini;
@@ -870,6 +898,7 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
           configCmpApiKey={config.centralServer?.apiKey ?? ''}
           configVpnEnabled={config.vpn?.enabled ?? true}
           configTailscaleEnabled={config.tailscale?.enabled ?? true}
+          configTailscaleMode={config.tailscale?.mode ?? 'inbound'}
           onClose={() => setShowSettings(false)}
           onSave={handleSettingsSave}
         />

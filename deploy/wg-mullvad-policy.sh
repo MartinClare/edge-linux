@@ -7,10 +7,6 @@ TARGET_HOSTS=(
   "openrouter.ai"
 )
 
-uplink_dev() {
-  ip -4 route show default | awk '/default/ {print $5; exit}'
-}
-
 resolve_ipv4s() {
   local host="$1"
   getent ahostsv4 "$host" 2>/dev/null | awk '{print $1}' | sort -u
@@ -30,12 +26,7 @@ apply_up() {
     done < <(resolve_ipv4s "$host")
   done
 
-  # Keep Tailscale carrier-grade range on uplink path (avoid VPN interference).
-  local uplink
-  uplink="$(uplink_dev)"
-  if [ -n "${uplink:-}" ]; then
-    ip route replace 100.64.0.0/10 dev "$uplink" metric 5 2>/dev/null || true
-  fi
+  # Keep Tailscale control-plane helper route explicit.
   ip route replace 100.100.100.100/32 dev tailscale0 metric 5 2>/dev/null || true
 
   ip route flush cache
@@ -50,11 +41,6 @@ apply_down() {
     done < <(resolve_ipv4s "$host")
   done
 
-  local uplink
-  uplink="$(uplink_dev)"
-  if [ -n "${uplink:-}" ]; then
-    ip route del 100.64.0.0/10 dev "$uplink" metric 5 2>/dev/null || true
-  fi
   ip route del 100.100.100.100/32 dev tailscale0 metric 5 2>/dev/null || true
   ip route flush cache
 }

@@ -936,18 +936,46 @@ def _ensure_edge_cloud_running() -> None:
         logger.warning("edge-cloud start failed: %s", e)
 
 
-def _apply_tailscale(enabled: bool) -> None:
-    """Apply Tailscale on/off (runs sudo tailscale up/down)."""
+def _apply_tailscale(enabled: bool, mode: str = "inbound") -> None:
+    """Apply Tailscale on/off and operating mode in real time from PPE-UI."""
     try:
         if enabled:
+            # Ensure daemon is running before bringing tunnel up.
             subprocess.run(
-                ["sudo", "tailscale", "up", "--accept-dns=false", "--netfilter-mode=off", "--ssh"],
+                ["sudo", "systemctl", "start", "tailscaled"],
+                timeout=15,
+                capture_output=True,
+                check=False,
+            )
+            tailscale_up_cmd = [
+                "sudo",
+                "tailscale",
+                "up",
+                "--accept-dns=false",
+                "--netfilter-mode=off",
+                "--shields-up=false",
+                "--ssh=true",
+            ]
+            subprocess.run(
+                tailscale_up_cmd,
                 timeout=30,
                 capture_output=True,
                 check=False,
             )
         else:
-            subprocess.run(["sudo", "tailscale", "down"], timeout=15, capture_output=True, check=False)
+            subprocess.run(
+                ["sudo", "tailscale", "down"],
+                timeout=15,
+                capture_output=True,
+                check=False,
+            )
+            # Fully stop daemon so UI status reflects "off".
+            subprocess.run(
+                ["sudo", "systemctl", "stop", "tailscaled"],
+                timeout=15,
+                capture_output=True,
+                check=False,
+            )
     except Exception as e:
         logger.warning("Tailscale apply failed: %s", e)
 
@@ -1014,7 +1042,7 @@ async def update_app_config(request: Request):
           "rtsp": { "cameras": [...], "fpsLimit", "geminiInterval", "autoStart" },
           "centralServer": { "enabled", "url", "apiKey" },
           "vpn": { "enabled" },
-          "tailscale": { "enabled": true|false },
+          "tailscale": { "enabled": true|false, "mode": "inbound"|"outbound" },
           "network": { ... }
         }
     Merges into existing config and writes to root + mirrors. Applies Tailscale on/off when tailscale is present.
@@ -1073,9 +1101,12 @@ async def update_app_config(request: Request):
         # Apply VPN on/off in real time if present
         if "vpn" in body:
             _apply_vpn(config.get("vpn", {}).get("enabled", True))
-        # Apply Tailscale on/off if present
+        # Apply Tailscale on/off/mode if present
         if "tailscale" in body:
-            _apply_tailscale(config.get("tailscale", {}).get("enabled", True))
+            _apply_tailscale(
+                config.get("tailscale", {}).get("enabled", True),
+                config.get("tailscale", {}).get("mode", "inbound"),
+            )
 
         return {"success": True, "message": "Config saved to app.config.json"}
     except HTTPException:

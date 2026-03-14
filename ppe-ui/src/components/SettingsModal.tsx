@@ -6,10 +6,14 @@ interface CameraConfig {
   name: string;
   url: string;
   enabled: boolean;
+  tailscaleUrl?: string;
+  useTailscale?: boolean;
 }
 
 interface AppSettings {
   cameraUrls: Record<string, string>;
+  cameraTailscaleUrls: Record<string, string>;
+  cameraUseTailscale: Record<string, boolean>;
   cameraNames: Record<string, string>;
   cameraEnabled: Record<string, boolean>;
   fpsLimit: number;
@@ -24,6 +28,7 @@ interface AppSettings {
   vpn: { enabled: boolean };
   tailscale: {
     enabled: boolean;
+    mode: 'inbound' | 'outbound';
   };
 }
 
@@ -38,6 +43,7 @@ interface SettingsModalProps {
   configCmpApiKey: string;
   configVpnEnabled: boolean;
   configTailscaleEnabled: boolean;
+  configTailscaleMode: 'inbound' | 'outbound';
   onClose: () => void;
   onSave: (settings: AppSettings) => void;
 }
@@ -53,10 +59,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   configCmpApiKey,
   configVpnEnabled,
   configTailscaleEnabled,
+  configTailscaleMode,
   onClose,
   onSave
 }) => {
   const [cameraUrls, setCameraUrls] = useState<Record<string, string>>({});
+  const [cameraTailscaleUrls, setCameraTailscaleUrls] = useState<Record<string, string>>({});
+  const [cameraUseTailscale, setCameraUseTailscale] = useState<Record<string, boolean>>({});
   const [cameraNames, setCameraNames] = useState<Record<string, string>>({});
   const [cameraEnabled, setCameraEnabled] = useState<Record<string, boolean>>({});
   const [fpsLimit, setFpsLimit] = useState(configFpsLimit);
@@ -68,6 +77,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [cmpApiKey, setCmpApiKey] = useState(configCmpApiKey);
   const [vpnEnabled, setVpnEnabled] = useState(configVpnEnabled);
   const [tailscaleEnabled, setTailscaleEnabled] = useState(configTailscaleEnabled);
+  const [tailscaleMode, setTailscaleMode] = useState<'inbound' | 'outbound'>(configTailscaleMode);
   const [hasChanges, setHasChanges] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<Record<string, { label: string; status: string }> | null>(null);
   const [serviceStatusLoading, setServiceStatusLoading] = useState(false);
@@ -103,6 +113,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setHasChanges(true);
   };
 
+  const handleCameraTailscaleUrlChange = (cameraId: string, url: string) => {
+    setCameraTailscaleUrls(prev => ({ ...prev, [cameraId]: url }));
+    setHasChanges(true);
+  };
+
+  const handleCameraUseTailscaleToggle = (cameraId: string, useTailscale: boolean) => {
+    setCameraUseTailscale(prev => ({ ...prev, [cameraId]: useTailscale }));
+    setHasChanges(true);
+  };
+
   const resetCameraName = (cameraId: string) => {
     setCameraNames(prev => {
       const updated = { ...prev };
@@ -126,9 +146,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setHasChanges(true);
   };
 
+  const resetCameraTailscaleUrl = (cameraId: string) => {
+    setCameraTailscaleUrls(prev => {
+      const updated = { ...prev };
+      delete updated[cameraId];
+      return updated;
+    });
+    setHasChanges(true);
+  };
+
   const handleSave = () => {
     const settings: AppSettings = {
       cameraUrls,
+      cameraTailscaleUrls,
+      cameraUseTailscale,
       cameraNames,
       cameraEnabled,
       fpsLimit,
@@ -143,6 +174,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       vpn: { enabled: vpnEnabled },
       tailscale: {
         enabled: tailscaleEnabled,
+        mode: tailscaleMode,
       },
     };
 
@@ -155,6 +187,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           name: cameraNames[c.id] ?? c.name,
           url: cameraUrls[c.id] ?? c.url,
           enabled: cameraEnabled[c.id] !== undefined ? cameraEnabled[c.id] : c.enabled,
+          tailscaleUrl: cameraTailscaleUrls[c.id] ?? c.tailscaleUrl ?? '',
+          useTailscale: cameraUseTailscale[c.id] !== undefined ? cameraUseTailscale[c.id] : !!c.useTailscale,
         })),
         fpsLimit,
         geminiInterval,
@@ -190,6 +224,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleReset = () => {
     if (window.confirm('Reset all settings to defaults from config file?')) {
       setCameraUrls({});
+      setCameraTailscaleUrls({});
+      setCameraUseTailscale({});
       setCameraNames({});
       setCameraEnabled({});
       setFpsLimit(configFpsLimit);
@@ -201,12 +237,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setCmpApiKey(configCmpApiKey);
       setVpnEnabled(configVpnEnabled);
       setTailscaleEnabled(configTailscaleEnabled);
+      setTailscaleMode(configTailscaleMode);
       setHasChanges(true);
     }
   };
 
   const getEffectiveUrl = (camera: CameraConfig) => {
     return cameraUrls[camera.id] || camera.url;
+  };
+
+  const getEffectiveTailscaleUrl = (camera: CameraConfig) => {
+    return cameraTailscaleUrls[camera.id] ?? camera.tailscaleUrl ?? '';
+  };
+
+  const getEffectiveUseTailscale = (camera: CameraConfig) => {
+    return cameraUseTailscale[camera.id] !== undefined ? cameraUseTailscale[camera.id] : !!camera.useTailscale;
   };
 
   const getEffectiveEnabled = (camera: CameraConfig) => {
@@ -216,6 +261,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const isUrlEdited = (cameraId: string) => {
     return !!cameraUrls[cameraId];
+  };
+
+  const isTailscaleUrlEdited = (cameraId: string) => {
+    return cameraTailscaleUrls[cameraId] !== undefined;
   };
 
   const isNameEdited = (cameraId: string) => {
@@ -228,6 +277,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const isEnabledEdited = (camera: CameraConfig) => {
     return cameraEnabled[camera.id] !== undefined && cameraEnabled[camera.id] !== camera.enabled;
+  };
+
+  const isUseTailscaleEdited = (camera: CameraConfig) => {
+    return cameraUseTailscale[camera.id] !== undefined && cameraUseTailscale[camera.id] !== !!camera.useTailscale;
   };
 
   return (
@@ -578,6 +631,34 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   />
                   Enable Tailscale (remote access)
                 </label>
+                <div style={{ marginTop: '0.5rem', marginLeft: '1.5rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.35rem', color: 'rgba(255,255,255,0.75)', fontSize: '0.82rem' }}>
+                    Tailscale mode
+                  </label>
+                  <select
+                    value={tailscaleMode}
+                    onChange={(e) => {
+                      setTailscaleMode(e.target.value as 'inbound' | 'outbound');
+                      setHasChanges(true);
+                    }}
+                    style={{
+                      width: '100%',
+                      maxWidth: '420px',
+                      padding: '0.45rem',
+                      borderRadius: '4px',
+                      border: '1px solid rgba(0, 217, 255, 0.3)',
+                      background: 'rgba(0, 0, 0, 0.3)',
+                      color: '#fff',
+                      fontSize: '0.9rem'
+                    }}
+                  >
+                    <option value="inbound">Inbound access (admin can access edge over Tailscale)</option>
+                    <option value="outbound">Outbound only (edge uses Tailscale for remote cameras)</option>
+                  </select>
+                  <small style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.78rem', display: 'block', marginTop: '0.3rem' }}>
+                    Both modes keep Tailscale open; use this to match your camera connectivity scenario.
+                  </small>
+                </div>
               </div>
             </div>
           </div>
@@ -591,11 +672,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {cameras.map((camera) => {
                 const effectiveUrl = getEffectiveUrl(camera);
+                const effectiveTailscaleUrl = getEffectiveTailscaleUrl(camera);
+                const effectiveUseTailscale = getEffectiveUseTailscale(camera);
                 const effectiveName = getEffectiveName(camera);
                 const effectiveEnabled = getEffectiveEnabled(camera);
                 const urlEdited = isUrlEdited(camera.id);
+                const tailscaleUrlEdited = isTailscaleUrlEdited(camera.id);
                 const nameEdited = isNameEdited(camera.id);
                 const enabledEdited = isEnabledEdited(camera);
+                const useTailscaleEdited = isUseTailscaleEdited(camera);
 
                 return (
                   <div
@@ -645,7 +730,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           ✏️ Modified
                         </span>
                       )}
-                      {(urlEdited || nameEdited) && (
+                      {(urlEdited || tailscaleUrlEdited || nameEdited || useTailscaleEdited) && (
                         <span style={{ fontSize: '0.75rem', background: 'rgba(76, 175, 80, 0.2)', color: '#4caf50', padding: '0.1rem 0.4rem', borderRadius: '3px' }}>
                           ✏️ Edited
                         </span>
@@ -695,7 +780,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                     {/* RTSP URL */}
                     <label style={{ display: 'block', marginBottom: '0.3rem', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>
-                      RTSP URL
+                      Direct RTSP URL (LAN/eth2)
                     </label>
                     <input
                       type="text"
@@ -732,7 +817,90 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           fontSize: '0.8rem'
                         }}
                       >
-                        ↻ Reset URL to Default
+                        ↻ Reset Direct URL
+                      </button>
+                    )}
+
+                    <div style={{ marginTop: '0.8rem' }}>
+                      <label style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.45rem',
+                        cursor: 'pointer',
+                        color: 'rgba(255,255,255,0.9)',
+                        fontSize: '0.85rem',
+                        marginBottom: '0.4rem'
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={effectiveUseTailscale}
+                          onChange={(e) => handleCameraUseTailscaleToggle(camera.id, e.target.checked)}
+                          disabled={!effectiveEnabled}
+                          style={{ width: '14px', height: '14px', cursor: 'pointer' }}
+                        />
+                        Use Tailscale path for this camera
+                      </label>
+
+                      <label style={{ display: 'block', marginBottom: '0.3rem', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>
+                        Tailscale RTSP URL (remote)
+                      </label>
+                      <input
+                        type="text"
+                        value={effectiveTailscaleUrl}
+                        onChange={(e) => handleCameraTailscaleUrlChange(camera.id, e.target.value)}
+                        placeholder="rtsp://user:pass@100.x.y.z:554/..."
+                        disabled={!effectiveEnabled}
+                        style={{
+                          width: '100%',
+                          padding: '0.5rem',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(0, 217, 255, 0.3)',
+                          background: effectiveEnabled ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.2)',
+                          color: tailscaleUrlEdited ? '#4caf50' : '#fff',
+                          fontSize: '0.85rem',
+                          fontFamily: 'monospace',
+                          marginBottom: '0.5rem',
+                          opacity: effectiveEnabled ? 1 : 0.5,
+                          cursor: effectiveEnabled ? 'text' : 'not-allowed',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                      {tailscaleUrlEdited && effectiveEnabled && (
+                        <button
+                          onClick={() => resetCameraTailscaleUrl(camera.id)}
+                          style={{
+                            padding: '0.3rem 0.6rem',
+                            borderRadius: '4px',
+                            border: '1px solid #ff9800',
+                            background: 'rgba(255, 152, 0, 0.1)',
+                            color: '#ff9800',
+                            cursor: 'pointer',
+                            fontSize: '0.8rem',
+                            marginBottom: '0.3rem'
+                          }}
+                        >
+                          ↻ Reset Tailscale URL
+                        </button>
+                      )}
+                      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem' }}>
+                        When enabled, stream uses Tailscale URL; otherwise it uses Direct URL.
+                      </div>
+                    </div>
+                    {useTailscaleEdited && (
+                      <button
+                        onClick={() => handleCameraUseTailscaleToggle(camera.id, !!camera.useTailscale)}
+                        style={{
+                          marginTop: '0.45rem',
+                          padding: '0.3rem 0.6rem',
+                          borderRadius: '4px',
+                          border: '1px solid #ff9800',
+                          background: 'rgba(255, 152, 0, 0.1)',
+                          color: '#ff9800',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        ↻ Reset Route Toggle
                       </button>
                     )}
                   </div>
