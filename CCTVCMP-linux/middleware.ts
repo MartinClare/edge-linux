@@ -3,10 +3,14 @@ import { verifyToken } from "@/lib/auth";
 import { AUTH_COOKIE_NAME } from "@/lib/constants";
 import { getRequiredRoles, hasRoleAccess } from "@/lib/rbac";
 
-const authRoutes = ["/signin", "/signup"];
+const authRoutes = ["/signin"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname === "/signup" || pathname.startsWith("/signup/")) {
+    return NextResponse.redirect(new URL("/signin", request.url));
+  }
 
   if (pathname.startsWith("/_next") || pathname.startsWith("/favicon") || pathname.includes(".")) {
     return NextResponse.next();

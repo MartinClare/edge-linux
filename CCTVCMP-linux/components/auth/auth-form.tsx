@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
+export function AuthForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -15,13 +15,12 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
     setLoading(true);
     setError(null);
 
-    const payload: Record<string, string> = {
+    const payload = {
       email: String(formData.get("email") || ""),
       password: String(formData.get("password") || ""),
     };
-    if (mode === "signup") payload.name = String(formData.get("name") || "");
 
-    const res = await fetch(`/api/auth/${mode}`, {
+    const res = await fetch("/api/auth/signin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -40,14 +39,13 @@ export function AuthForm({ mode }: { mode: "signin" | "signup" }) {
 
   return (
     <Card className="w-full max-w-md">
-      <CardHeader><CardTitle>{mode === "signin" ? "Sign in" : "Sign up"}</CardTitle></CardHeader>
+      <CardHeader><CardTitle>Sign in</CardTitle></CardHeader>
       <CardContent>
         <form action={onSubmit} className="space-y-4">
-          {mode === "signup" && <Input name="name" placeholder="Full name" required />}
           <Input type="email" name="email" placeholder="Email" required />
           <Input type="password" name="password" placeholder="Password" required />
           {error && <p className="text-sm text-red-400">{error}</p>}
-          <Button type="submit" disabled={loading} className="w-full">{loading ? "Please wait..." : mode === "signin" ? "Sign in" : "Create account"}</Button>
+          <Button type="submit" disabled={loading} className="w-full">{loading ? "Please wait..." : "Sign in"}</Button>
         </form>
       </CardContent>
     </Card>

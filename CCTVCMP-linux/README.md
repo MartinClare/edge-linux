@@ -48,7 +48,7 @@ app/
     settings/           # Alarm rule configuration
   api/
     auth/signin         # POST
-    auth/signup         # POST
+    auth/signup         # POST — disabled (403); admins create users via /api/users or DB
     auth/signout        # POST
     incidents/          # GET, POST
     incidents/[id]/     # GET, PATCH
@@ -59,7 +59,6 @@ app/
     analytics/          # GET
     webhook/edge-report # POST — edge device ingest endpoint
   signin/
-  signup/
 components/
   ui/                   # Button, Card, Input, Badge, Table, …
   layout/               # AppShell, Sidebar, TopNavbar
@@ -121,7 +120,8 @@ EDGE_API_KEY="axonedge852852"
 OPENROUTER_API_KEY="sk-or-v1-..."
 ```
 
-> **Neon tip:** Use the **pooled** connection string (hostname contains `-pooler`). Remove `&channel_binding=require` from the URL — Prisma does not support it.
+> **Neon tip:** Use the **pooled** connection string (hostname contains `-pooler`). Remove `&channel_binding=require` from the URL — Prisma does not support it.  
+> **Vercel:** Set only `DATABASE_URL` (and the other three vars below). `DIRECT_URL` is not required unless you re-enable a separate `directUrl` in `prisma/schema.prisma` for Neon direct connections.
 
 ---
 
@@ -179,7 +179,7 @@ node -e "require('bcryptjs').hash('YourPassword', 12).then(console.log)"
 
 | Method | Endpoint | Body | Description |
 |---|---|---|---|
-| POST | `/api/auth/signup` | `{ name, email, password }` | Register new user |
+| POST | `/api/auth/signup` | — | **Disabled** (403). Admins create users: `POST /api/users` (admin session) or SQL |
 | POST | `/api/auth/signin` | `{ email, password }` | Sign in, sets cookie |
 | POST | `/api/auth/signout` | — | Clears auth cookie |
 

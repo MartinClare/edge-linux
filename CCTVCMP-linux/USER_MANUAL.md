@@ -48,8 +48,8 @@ Access is provisioned by your system administrator.
 3. You will receive your temporary password from your admin
 4. Sign in at the platform URL and change your password immediately
 
-> Only **Admins** can create new user accounts via the API (`POST /api/users`).  
-> Self-registration via `/signup` is available but accounts default to the `viewer` role.
+> Only **Admins** can create new user accounts via the API (`POST /api/users`) while signed in.  
+> Self-registration is **disabled**; `/signup` redirects to sign-in.
 
 ---
 
@@ -62,14 +62,6 @@ Access is provisioned by your system administrator.
 3. Enter your **Email** and **Password**
 4. Click **Sign in**
 5. On success you are taken directly to the **Dashboard**
-
-### Signing Up (self-registration)
-
-1. Click **Create one** on the Sign In page or navigate to `/signup`
-2. Enter your **Full name**, **Email**, and **Password** (minimum 8 characters)
-3. Click **Create account**
-4. Your account is created with the `viewer` role by default
-5. Contact your admin to have your role elevated if needed
 
 ### Signing Out
 
