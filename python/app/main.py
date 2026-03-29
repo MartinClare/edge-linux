@@ -137,9 +137,10 @@ def _analyze_with_cloud(frame_jpeg: bytes) -> Optional[dict]:
     if not _ensure_vpn_ready_for_gemini():
         logger.warning("Skipping Gemini call: VPN is not ready")
         return None
+    analyze_url = (os.getenv("EDGE_CLOUD_ANALYZE_URL") or "").strip() or "http://127.0.0.1:3001/api/analyze-image"
     try:
         resp = requests.post(
-            "http://127.0.0.1:3001/api/analyze-image",
+            analyze_url,
             files={"image": ("frame.jpg", frame_jpeg, "image/jpeg")},
             data={"language": "en"},
             timeout=45,
@@ -263,10 +264,15 @@ def _build_alarm_payload(camera_id: str, camera_name: str, result: dict) -> dict
 async def _deepvision_background_loop():
     global _deepvision_camera_index, _latest_deepvision_results
     _latest_deepvision_results = _load_deepvision_cache()
-    logger.info("Deep Vision background loop started")
+    logger.info(
+        "Deep Vision background loop started (runs without PPE-UI; posts to CMP from this service when centralServer.enabled)"
+    )
     while True:
         try:
             cfg = _load_runtime_config()
+            # CMP / centralServer: always follow disk so headless operation picks up edits without opening the UI.
+            if isinstance(cfg.get("centralServer"), dict):
+                get_alarm_observer().set_central_server_config(cfg["centralServer"])
             ui_cfg = cfg.get("ui", {}) if isinstance(cfg, dict) else {}
             rtsp_cfg = cfg.get("rtsp", {}) if isinstance(cfg, dict) else {}
             deepvision_enabled = ui_cfg.get("deepVisionEnabled", True)
@@ -332,7 +338,9 @@ async def startup_event():
         # Start configured network services every backend startup.
         _ensure_network_services_on_startup()
         central_server_cfg = {}
-        # Load central server webhook settings from app.config.json for alarm observer forwarding.
+        # CMP webhook: centralServer.{enabled,url,apiKey} → posts JSON built by app/cmp_webhook.py
+        # (aligned with CCTVCMP/lib/validations/webhook.ts + CCTVCMP/app/api/webhook/edge-report/route.ts).
+        # Local CMP from this repo: npm run dev in CCTVCMP → http://localhost:3002/api/webhook/edge-report
         try:
             cfg_path = _root_app_config_path()
             if cfg_path.exists():
@@ -346,6 +354,11 @@ async def startup_event():
         observer = get_alarm_observer(central_server_config=central_server_cfg)
         observer.start_monitoring()
         logger.info("Alarm observer started successfully")
+        logger.info(
+            "Headless safety pipeline: RTSP Deep Vision + CMP webhook run inside this API process; "
+            "PPE-UI is optional (viewing/settings only). Ensure edge-cloud is up for Gemini (port 3001) "
+            "unless EDGE_CLOUD_ANALYZE_URL points elsewhere."
+        )
         global _deepvision_task
         if _deepvision_task is None or _deepvision_task.done():
             _deepvision_task = asyncio.create_task(_deepvision_background_loop())
@@ -1276,6 +1289,11 @@ async def update_app_config(request: Request):
                 logger.warning("Mirror config sync failed for %s: %s", p, mirror_exc)
 
         logger.info("Root app.config.json updated from ppe-ui Settings")
+
+        try:
+            get_alarm_observer().refresh_central_server_from_app_config_json()
+        except Exception as obs_exc:
+            logger.warning("Could not refresh observer CMP config after save: %s", obs_exc)
 
         # Apply VPN on/off in real time if present
         if "vpn" in body:

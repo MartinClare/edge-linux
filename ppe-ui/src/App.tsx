@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import LoginPage from './components/LoginPage';
 import InputPanel from './components/InputPanel';
 import ImageUpload from './components/ImageUpload';
 import VideoUpload from './components/VideoUpload';
 import RTSPStream from './components/RTSPStream';
-import MultiCameraGrid from './components/MultiCameraGrid';
+import MultiCameraGrid, { type MultiCameraGridHandle } from './components/MultiCameraGrid';
 import MonitoringDashboard from './components/MonitoringDashboard';
+import GeminiPpeNarrative from './components/GeminiPpeNarrative';
 import VideoResultsDashboard from './components/VideoResultsDashboard';
 import VideoPlayer from './components/VideoPlayer';
 import AlarmObserverPanel from './components/AlarmObserverPanel';
@@ -57,6 +58,7 @@ function App() {
   const [yoloFps, setYoloFps] = useState<number>(15); // Default 15fps for real-time YOLO analysis
   const [currentAnalysisCameraId, setCurrentAnalysisCameraId] = useState<string | null>(null); // Track which camera sent the result
   const [currentAnalysisCameraName, setCurrentAnalysisCameraName] = useState<string | null>(null);
+  const multiCameraGridRef = useRef<MultiCameraGridHandle>(null);
 
   // Load configuration and set defaults
   useEffect(() => {
@@ -406,13 +408,6 @@ function App() {
   const useGeminiCounts = analysisMode === 'gemini' && geminiResult;
   const useAlertCounts = analysisMode === 'alerts' && alertResult;
   
-  // Get counts from appropriate source
-  const finalPersonCount = (useAlertCounts && alertResult?.peopleCount !== undefined)
-      ? alertResult.peopleCount
-      : (useGeminiCounts && geminiResult?.peopleCount !== undefined) 
-        ? geminiResult.peopleCount 
-        : personCount;
-      
   const finalMissingHardhats = (useAlertCounts && alertResult?.missingHardhats !== undefined)
       ? alertResult.missingHardhats
       : (useGeminiCounts && geminiResult?.missingHardhats !== undefined)
@@ -429,7 +424,7 @@ function App() {
     totalDetections: filteredDetections.length,
     ppeCompliant: hardhatCount + vestCount, // Total PPE items detected
     violations: totalViolations,
-    personCount: finalPersonCount,
+    personCount,
     hardhatCount: hardhatCount,
     vestCount: vestCount,
     missingHardhats: finalMissingHardhats,
@@ -473,6 +468,28 @@ function App() {
                 <p style={{ margin: '0.5rem 0 0 0', opacity: 0.85 }}>
                   Live stream and view options are on the <strong>main screen</strong> →
                 </p>
+                <button
+                  type="button"
+                  onClick={() => multiCameraGridRef.current?.openSettings()}
+                  style={{
+                    marginTop: '0.85rem',
+                    width: '100%',
+                    padding: '0.55rem 0.75rem',
+                    borderRadius: '6px',
+                    border: '1px solid #00d9ff',
+                    background: 'rgba(0, 217, 255, 0.12)',
+                    color: '#00d9ff',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.45rem',
+                  }}
+                >
+                  ⚙️ Settings
+                </button>
               </div>
             )}
 
@@ -634,55 +651,10 @@ function App() {
                     </p>
                   </div>
 
-                  {/* PPE Status Cards */}
-                  {(geminiResult.peopleCount !== undefined || 
-                    geminiResult.missingHardhats !== undefined || 
-                    geminiResult.missingVests !== undefined) && (
-                    <div style={{ marginBottom: '2rem' }}>
-                      <h3 style={{ color: '#bb86fc', fontSize: '1.3rem', marginBottom: '1rem' }}>👥 People & PPE Status</h3>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.5rem' }}>
-                        <div style={{ 
-                          padding: '1.5rem', 
-                          background: 'rgba(0,0,0,0.4)', 
-                          borderRadius: '12px',
-                          textAlign: 'center',
-                          border: '2px solid rgba(187,134,252,0.4)',
-                          boxShadow: '0 4px 12px rgba(187,134,252,0.2)'
-                        }}>
-                          <div style={{ fontSize: '3rem', fontWeight: 'bold', color: '#bb86fc', marginBottom: '0.5rem' }}>
-                            {geminiResult.peopleCount || 0}
-                          </div>
-                          <div style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.9)', fontWeight: 500 }}>Persons Detected</div>
-                        </div>
-                        <div style={{ 
-                          padding: '1.5rem', 
-                          background: 'rgba(0,0,0,0.4)', 
-                          borderRadius: '12px',
-                          textAlign: 'center',
-                          border: '2px solid rgba(244,67,54,0.4)',
-                          boxShadow: '0 4px 12px rgba(244,67,54,0.2)'
-                        }}>
-                          <div style={{ fontSize: '3rem', fontWeight: 'bold', color: '#f44336', marginBottom: '0.5rem' }}>
-                            {geminiResult.missingHardhats || 0}
-                          </div>
-                          <div style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.9)', fontWeight: 500 }}>Missing Hardhats</div>
-                        </div>
-                        <div style={{ 
-                          padding: '1.5rem', 
-                          background: 'rgba(0,0,0,0.4)', 
-                          borderRadius: '12px',
-                          textAlign: 'center',
-                          border: '2px solid rgba(244,67,54,0.4)',
-                          boxShadow: '0 4px 12px rgba(244,67,54,0.2)'
-                        }}>
-                          <div style={{ fontSize: '3rem', fontWeight: 'bold', color: '#f44336', marginBottom: '0.5rem' }}>
-                            {geminiResult.missingVests || 0}
-                          </div>
-                          <div style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.9)', fontWeight: 500 }}>Missing Safety Vests</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  <GeminiPpeNarrative
+                    missingHardhats={geminiResult.missingHardhats}
+                    missingVests={geminiResult.missingVests}
+                  />
 
                   {/* Safety Categories Grid */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
@@ -780,6 +752,7 @@ function App() {
               {inputSource === 'rtsp' && (
                 <div style={{ marginTop: '1.5rem' }}>
                   <MultiCameraGrid
+                    ref={multiCameraGridRef}
                     analysisMode={analysisMode}
                     onGeminiResult={(cameraId: string, cameraName: string, result: GeminiAnalysisResult | null) => {
                       console.log(`[App] Gemini result from camera: ${cameraName} (${cameraId})`, result);
@@ -875,23 +848,13 @@ function App() {
               </div>
               <p>{geminiResult.overallDescription}</p>
               
-              {(geminiResult.peopleCount !== undefined || geminiResult.missingHardhats !== undefined || geminiResult.missingVests !== undefined) && (
+              {(geminiResult.missingHardhats !== undefined ||
+                geminiResult.missingVests !== undefined) && (
                 <div className="ppe-counts">
-                  <h4>👥 People & PPE Status</h4>
-                  <div className="stats-panel">
-                    <div className="stat-card">
-                      <h4>Persons Detected</h4>
-                      <p className="stat-value">{geminiResult.peopleCount || 0}</p>
-                    </div>
-                    <div className="stat-card">
-                      <h4>Missing Hardhats</h4>
-                      <p className="stat-value danger">{geminiResult.missingHardhats || 0}</p>
-                    </div>
-                    <div className="stat-card">
-                      <h4>Missing Safety Vests</h4>
-                      <p className="stat-value danger">{geminiResult.missingVests || 0}</p>
-                    </div>
-                  </div>
+                  <GeminiPpeNarrative
+                    missingHardhats={geminiResult.missingHardhats}
+                    missingVests={geminiResult.missingVests}
+                  />
                 </div>
               )}
               
@@ -952,14 +915,10 @@ function App() {
               </div>
               <p>Alert Count: {alertResult.alertCount}</p>
               
-              {(alertResult.peopleCount !== undefined || alertResult.missingHardhats !== undefined || alertResult.missingVests !== undefined) && (
+              {(alertResult.missingHardhats !== undefined || alertResult.missingVests !== undefined) && (
                 <div className="ppe-counts">
-                  <h4>👥 People & PPE Status</h4>
+                  <h4>🦺 PPE status</h4>
                   <div className="stats-panel">
-                    <div className="stat-card">
-                      <h4>Persons Detected</h4>
-                      <p className="stat-value">{alertResult.peopleCount || 0}</p>
-                    </div>
                     <div className="stat-card">
                       <h4>Missing Hardhats</h4>
                       <p className="stat-value danger">{alertResult.missingHardhats || 0}</p>

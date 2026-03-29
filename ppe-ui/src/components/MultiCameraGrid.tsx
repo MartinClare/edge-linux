@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
 import RTSPLiveStream from './RTSPLiveStream';
+import GeminiPpeNarrative from './GeminiPpeNarrative';
 import SettingsModal from './SettingsModal';
 import type { AnalysisMode, GeminiAnalysisResult, AlertAnalysisResult } from '../types/detection.types';
 import { YOLO_API_URL } from '../config/api';
@@ -45,6 +46,10 @@ interface MultiCameraGridProps {
   onAlertResult?: (cameraId: string, cameraName: string, result: AlertAnalysisResult | null) => void;
 }
 
+export type MultiCameraGridHandle = {
+  openSettings: () => void;
+};
+
 interface BackendDeepVisionResult {
   camera_id: string;
   camera_name?: string;
@@ -52,11 +57,10 @@ interface BackendDeepVisionResult {
   analysis: GeminiAnalysisResult;
 }
 
-const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
-  analysisMode,
-  onGeminiResult,
-  onAlertResult
-}) => {
+const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(function MultiCameraGrid(
+  { analysisMode, onGeminiResult, onAlertResult },
+  ref
+) {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [enabledCameras, setEnabledCameras] = useState<CameraConfig[]>([]);
   const [cameraUrls, setCameraUrls] = useState<Record<string, string>>({}); // Track edited URLs
@@ -68,6 +72,9 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
   const [geminiInterval, setGeminiInterval] = useState<number>(5);
   const [autoStart, setAutoStart] = useState<boolean>(false);
   const [showSettings, setShowSettings] = useState(false);
+  useImperativeHandle(ref, () => ({
+    openSettings: () => setShowSettings(true),
+  }), []);
   const [configLoadError, setConfigLoadError] = useState<string | null>(null);
   const [configRetryToken, setConfigRetryToken] = useState(0);
 
@@ -330,7 +337,6 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
       willShowResults: (analysisMode === 'gemini' || analysisMode === 'alerts') && (geminiResult || alertResult),
       geminiResultData: geminiResult ? {
         risk: geminiResult.overallRiskLevel,
-        people: geminiResult.peopleCount,
         description: geminiResult.overallDescription?.substring(0, 50)
       } : null
     });
@@ -478,69 +484,11 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
                   </div>
                 </div>
 
-                {/* People & PPE Status */}
-                <div style={{ marginBottom: '1rem' }}>
-                  <div style={{ 
-                    fontWeight: 600, 
-                    fontSize: '0.85rem', 
-                    marginBottom: '0.5rem',
-                    color: '#e1bee7'
-                  }}>
-                    👥 People & PPE Status
-                  </div>
-                  <div style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(3, 1fr)', 
-                    gap: '0.5rem'
-                  }}>
-                    <div style={{ 
-                      padding: '0.75rem', 
-                      background: 'rgba(0, 217, 255, 0.1)',
-                      border: '1px solid rgba(0, 217, 255, 0.3)',
-                      borderRadius: '6px',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#00d9ff', marginBottom: '0.25rem' }}>
-                        {geminiResult.peopleCount || 0}
-                      </div>
-                      <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)' }}>Persons Detected</div>
-                    </div>
-                    <div style={{ 
-                      padding: '0.75rem', 
-                      background: (geminiResult.missingHardhats ?? 0) > 0 ? 'rgba(233, 69, 96, 0.1)' : 'rgba(76, 175, 80, 0.1)',
-                      border: `1px solid ${(geminiResult.missingHardhats ?? 0) > 0 ? 'rgba(233, 69, 96, 0.3)' : 'rgba(76, 175, 80, 0.3)'}`,
-                      borderRadius: '6px',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{ 
-                        fontSize: '1.5rem', 
-                        fontWeight: 'bold', 
-                        color: (geminiResult.missingHardhats ?? 0) > 0 ? '#e94560' : '#4caf50',
-                        marginBottom: '0.25rem'
-                      }}>
-                        {geminiResult.missingHardhats ?? 0}
-                      </div>
-                      <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)' }}>Missing Hardhats</div>
-                    </div>
-                    <div style={{ 
-                      padding: '0.75rem', 
-                      background: (geminiResult.missingVests ?? 0) > 0 ? 'rgba(233, 69, 96, 0.1)' : 'rgba(76, 175, 80, 0.1)',
-                      border: `1px solid ${(geminiResult.missingVests ?? 0) > 0 ? 'rgba(233, 69, 96, 0.3)' : 'rgba(76, 175, 80, 0.3)'}`,
-                      borderRadius: '6px',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{ 
-                        fontSize: '1.5rem', 
-                        fontWeight: 'bold', 
-                        color: (geminiResult.missingVests ?? 0) > 0 ? '#e94560' : '#4caf50',
-                        marginBottom: '0.25rem'
-                      }}>
-                        {geminiResult.missingVests ?? 0}
-                      </div>
-                      <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)' }}>Missing Safety Vests</div>
-                    </div>
-                  </div>
-                </div>
+                <GeminiPpeNarrative
+                  compact
+                  missingHardhats={geminiResult.missingHardhats}
+                  missingVests={geminiResult.missingVests}
+                />
 
                 {/* Construction Safety */}
                 {geminiResult.constructionSafety && (
@@ -799,7 +747,7 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
             borderRadius: '8px',
             border: '1px solid rgba(0, 217, 255, 0.25)',
             alignItems: 'center',
-            justifyContent: 'space-between'
+            justifyContent: 'flex-start'
           }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
               <span style={{ color: 'rgba(255,255,255,0.8)', marginRight: '0.5rem' }}>View:</span>
@@ -837,27 +785,6 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
                 </span>
               </span>
             </div>
-
-            {/* Settings button */}
-            <button
-              onClick={() => setShowSettings(true)}
-              style={{
-                padding: '0.5rem 1rem',
-                borderRadius: '6px',
-                border: '1px solid #00d9ff',
-                background: 'rgba(0, 217, 255, 0.1)',
-                color: '#00d9ff',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                fontWeight: 500,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              ⚙️ Settings
-            </button>
           </div>
 
           {/* Multi-camera view: vertical stack with each camera in a row */}
@@ -913,7 +840,7 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
                       <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📹</div>
                       <div style={{ marginBottom: '0.5rem', fontWeight: 'bold' }}>Camera Disabled</div>
                       <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.4)' }}>
-                        Enable in <strong style={{ color: '#00d9ff' }}>⚙️ Settings</strong>
+                        Enable in <strong style={{ color: '#00d9ff' }}>Settings</strong> (left panel)
                       </div>
                       <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.3)', marginTop: '0.5rem' }}>
                         ID: {camera.id}
@@ -947,7 +874,7 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
       )}
     </>
   );
-};
+});
 
-// Wrap with React.memo to prevent unnecessary re-renders
-export default React.memo(MultiCameraGrid);
+// Not wrapped in memo() so ref from App (open Settings) forwards correctly on React 18.
+export default MultiCameraGrid;

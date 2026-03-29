@@ -150,10 +150,6 @@ const MonitoringDashboard: React.FC<MonitoringDashboardProps> = ({
       {stats && (
         <div className="stats-panel">
           <div className="stat-card">
-            <h4>Persons Detected</h4>
-            <p className="stat-value">{stats.personCount}</p>
-          </div>
-          <div className="stat-card">
             <h4>Missing Hardhats</h4>
             <p className="stat-value danger">{stats.missingHardhats !== undefined ? stats.missingHardhats : (stats.personCount > 0 && stats.hardhatCount !== undefined ? Math.max(0, stats.personCount - stats.hardhatCount) : 0)}</p>
           </div>

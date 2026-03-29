@@ -55,9 +55,12 @@ class AlarmResponse(BaseModel):
 @router.post("/process-analysis")
 async def process_analysis_result(analysis: AnalysisResultInput):
     """
-    Process a Deep Vision analysis result and trigger alarm if necessary.
-    
-    This is the main endpoint for integrating with the Gemini analysis pipeline.
+    Optional hook: process a Deep Vision–shaped payload and forward to CMP / alarms.
+
+    The primary pipeline runs headless in the edge-python process (`_deepvision_background_loop`
+    in main.py): it captures RTSP frames, calls edge-cloud Gemini, and calls
+    `AlarmObserver.process_analysis_result` without any browser. Use this route only for
+    external integrations or tests — not required for normal CMP reporting.
     """
     try:
         observer = get_alarm_observer()

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { analyzeImageGemini, analyzeImageAlerts } from '../services/geminiApi';
 import type { AnalysisMode, GeminiAnalysisResult, AlertAnalysisResult, GeminiDetection } from '../types/detection.types';
 import { YOLO_API_URL } from '../config/api';
+import GeminiPpeNarrative from './GeminiPpeNarrative';
 
 /** WebSocket must hit the FastAPI backend (same origin as YOLO), not the static UI host (e.g. :3000). */
 function yoloRtspStreamWebSocketUrl(): string {
@@ -151,7 +152,6 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
     if (latestGeminiResult) {
       console.log(`[RTSP-${cameraId}] Result details:`, {
         risk: latestGeminiResult.overallRiskLevel,
-        people: latestGeminiResult.peopleCount,
         missingHats: latestGeminiResult.missingHardhats,
         missingVests: latestGeminiResult.missingVests
       });
@@ -774,7 +774,7 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
             }}>
               <strong>Stream error:</strong> {streamError}
               <div style={{ marginTop: '0.35rem', fontSize: '0.85rem', opacity: 0.9 }}>
-                Check the RTSP URL (port, path, credentials) and that the camera is reachable. Use Settings → Scan network to discover working URLs.
+                Check the RTSP URL (port, path, credentials) and that the camera is reachable. Use Settings in the left panel → Scan network to discover working URLs.
               </div>
             </div>
           )}
@@ -928,69 +928,11 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
                     </div>
                   </div>
 
-                  {/* People & PPE Status */}
-                  <div style={{ marginBottom: '1rem' }}>
-                    <div style={{ 
-                      fontWeight: 600, 
-                      fontSize: '0.85rem', 
-                      marginBottom: '0.5rem',
-                      color: '#e1bee7'
-                    }}>
-                      👥 People & PPE Status
-                    </div>
-                    <div style={{ 
-                      display: 'grid', 
-                      gridTemplateColumns: 'repeat(3, 1fr)', 
-                      gap: '0.5rem'
-                    }}>
-                      <div style={{ 
-                        padding: '0.75rem', 
-                        background: 'rgba(0, 217, 255, 0.1)',
-                        border: '1px solid rgba(0, 217, 255, 0.3)',
-                        borderRadius: '6px',
-                        textAlign: 'center'
-                      }}>
-                        <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#00d9ff', marginBottom: '0.25rem' }}>
-                          {latestGeminiResult.peopleCount || 0}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)' }}>Persons Detected</div>
-                      </div>
-                      <div style={{ 
-                        padding: '0.75rem', 
-                        background: (latestGeminiResult.missingHardhats ?? 0) > 0 ? 'rgba(233, 69, 96, 0.1)' : 'rgba(76, 175, 80, 0.1)',
-                        border: `1px solid ${(latestGeminiResult.missingHardhats ?? 0) > 0 ? 'rgba(233, 69, 96, 0.3)' : 'rgba(76, 175, 80, 0.3)'}`,
-                        borderRadius: '6px',
-                        textAlign: 'center'
-                      }}>
-                        <div style={{ 
-                          fontSize: '1.5rem', 
-                          fontWeight: 'bold', 
-                          color: (latestGeminiResult.missingHardhats ?? 0) > 0 ? '#e94560' : '#4caf50',
-                          marginBottom: '0.25rem'
-                        }}>
-                          {latestGeminiResult.missingHardhats ?? 0}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)' }}>Missing Hardhats</div>
-                      </div>
-                      <div style={{ 
-                        padding: '0.75rem', 
-                        background: (latestGeminiResult.missingVests ?? 0) > 0 ? 'rgba(233, 69, 96, 0.1)' : 'rgba(76, 175, 80, 0.1)',
-                        border: `1px solid ${(latestGeminiResult.missingVests ?? 0) > 0 ? 'rgba(233, 69, 96, 0.3)' : 'rgba(76, 175, 80, 0.3)'}`,
-                        borderRadius: '6px',
-                        textAlign: 'center'
-                      }}>
-                        <div style={{ 
-                          fontSize: '1.5rem', 
-                          fontWeight: 'bold', 
-                          color: (latestGeminiResult.missingVests ?? 0) > 0 ? '#e94560' : '#4caf50',
-                          marginBottom: '0.25rem'
-                        }}>
-                          {latestGeminiResult.missingVests ?? 0}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.7)' }}>Missing Safety Vests</div>
-                      </div>
-                    </div>
-                  </div>
+                  <GeminiPpeNarrative
+                    compact
+                    missingHardhats={latestGeminiResult.missingHardhats}
+                    missingVests={latestGeminiResult.missingVests}
+                  />
 
                   {/* Construction Safety */}
                   {latestGeminiResult.constructionSafety && (

@@ -585,6 +585,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <label style={{ display: 'block', marginBottom: '0.5rem', color: 'rgba(255,255,255,0.9)', fontSize: '0.9rem' }}>
                   CMP Webhook URL
                 </label>
+                <small style={{ display: 'block', marginBottom: '0.35rem', color: 'rgba(255,255,255,0.55)', fontSize: '0.75rem' }}>
+                  Path must be <code style={{ color: '#00d9ff' }}>/api/webhook/edge-report</code>. Local CCTVCMP in this repo (port 3002):{' '}
+                  <code style={{ color: '#00d9ff' }}>http://localhost:3002/api/webhook/edge-report</code>
+                  {' · '}Production: <code style={{ color: '#00d9ff' }}>https://cctvcmp.vercel.app/api/webhook/edge-report</code>
+                </small>
                 <input
                   type="text"
                   value={cmpUrl}
@@ -592,7 +597,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     setCmpUrl(e.target.value);
                     setHasChanges(true);
                   }}
-                  placeholder="http://192.168.1.170:3002/api/webhook/edge-report"
+                  placeholder="http://localhost:3002/api/webhook/edge-report"
                   style={{
                     width: '100%',
                     padding: '0.5rem',
@@ -609,6 +614,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <label style={{ display: 'block', marginBottom: '0.5rem', color: 'rgba(255,255,255,0.9)', fontSize: '0.9rem' }}>
                   CMP API Key
                 </label>
+                <small style={{ display: 'block', marginBottom: '0.35rem', color: 'rgba(255,255,255,0.55)', fontSize: '0.75rem' }}>
+                  Sent as header <code style={{ color: '#00d9ff' }}>X-API-Key</code>. Must match CMP env <code style={{ color: '#00d9ff' }}>EDGE_API_KEY</code>.
+                </small>
                 <input
                   type="text"
                   value={cmpApiKey}
@@ -616,7 +624,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     setCmpApiKey(e.target.value);
                     setHasChanges(true);
                   }}
-                  placeholder="CMP API key"
+                  placeholder="Same value as EDGE_API_KEY on the CMP server"
                   style={{
                     width: '100%',
                     padding: '0.5rem',

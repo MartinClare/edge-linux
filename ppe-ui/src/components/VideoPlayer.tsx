@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import type { VideoAnalysisResult, FrameDetection, Detection, GeminiFrameAnalysis } from '../types/detection.types';
 import { detectImageYOLO } from '../services/yoloApi';
+import GeminiPpeNarrative from './GeminiPpeNarrative';
 
 const getColorForClass = (className: string): string => {
   if (className.includes('NO-')) return '#FF0000'; // Red for violations
@@ -518,16 +519,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Deep Vision (Gemini) counts (preferred when available)
   const geminiAnalysis = persistedGeminiAnalysis || currentGeminiAnalysis;
-  const geminiPersonCount = geminiAnalysis?.analysis?.peopleCount;
   const geminiMissingHardhats = geminiAnalysis?.analysis?.missingHardhats;
   const geminiMissingVests = geminiAnalysis?.analysis?.missingVests;
 
-  // Use Deep Vision counts if available, otherwise use YOLO counts
-  // Also ensure we use max values from stats to never decrease
-  const personCount = Math.max(
-    geminiPersonCount ?? yoloPersonCount,
-    stats.maxPersonCount ?? 0
-  );
   const missingHardhats = Math.max(
     geminiMissingHardhats ?? yoloMissingHardhats,
     stats.maxMissingHardhats ?? 0
@@ -647,10 +641,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         {/* Analysis Results Overlay at bottom */}
         <div className="video-analysis-overlay">
           <div className="overlay-stats">
-            <div className="overlay-stat-item">
-              <span className="overlay-stat-label">Persons:</span>
-              <span className="overlay-stat-value">{personCount}</span>
-            </div>
+            {!geminiAnalysis?.analysis && (
+            <>
             <div className="overlay-stat-item">
               <span className="overlay-stat-label">Missing Hardhats:</span>
               <span className="overlay-stat-value danger">{missingHardhats}</span>
@@ -659,6 +651,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <span className="overlay-stat-label">Missing Vests:</span>
               <span className="overlay-stat-value danger">{missingVests}</span>
             </div>
+            </>
+            )}
             <div className="overlay-stat-item">
               <span className="overlay-stat-label">Time:</span>
               <span className="overlay-stat-value">{formatTime(currentTime)}</span>
@@ -680,6 +674,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     </span>
                   </div>
                   <p className="overlay-gemini-description">{displayAnalysis.analysis.overallDescription}</p>
+                  <GeminiPpeNarrative
+                    compact
+                    missingHardhats={displayAnalysis.analysis.missingHardhats}
+                    missingVests={displayAnalysis.analysis.missingVests}
+                  />
                   {displayAnalysis.analysis.constructionSafety.issues.length > 0 && (
                     <div className="overlay-gemini-issues">
                       <strong>Issues:</strong>

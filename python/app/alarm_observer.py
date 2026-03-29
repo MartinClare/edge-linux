@@ -20,6 +20,8 @@ from datetime import datetime, timedelta
 from enum import Enum
 import requests
 
+from .cmp_webhook import build_edge_report_json_body
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -93,7 +95,25 @@ class AlarmObserver:
         
         logger.info(f"Alarm Observer initialized with config: {config_path}")
         logger.info(f"Alarm system enabled: {self.config.get('alarmSystem', {}).get('enabled', False)}")
-    
+
+    def set_central_server_config(self, cfg: Optional[Dict]) -> None:
+        """Replace CMP (centralServer) webhook settings from app.config.json — no process restart required."""
+        if isinstance(cfg, dict):
+            self.central_server_config = dict(cfg)
+
+    def refresh_central_server_from_app_config_json(self) -> None:
+        """Reload centralServer from repo-root app.config.json (authoritative path, same as FastAPI)."""
+        root = Path(__file__).resolve().parent.parent.parent / "app.config.json"
+        try:
+            if not root.exists():
+                return
+            with open(root, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data.get("centralServer"), dict):
+                self.set_central_server_config(data["centralServer"])
+        except Exception as e:
+            logger.warning("refresh_central_server_from_app_config_json: %s", e)
+
     def _load_config(self) -> Dict:
         """Load configuration from JSON file"""
         try:
@@ -511,21 +531,11 @@ class AlarmObserver:
         retry_attempts = int(cfg.get("retryAttempts", 3))
         retry_delay = int(cfg.get("retryDelay", 5))
 
-        payload = {
-            "edgeCameraId": camera_id,
-            "cameraName": camera_name or camera_id,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "analysis": {
-                "overallDescription": analysis_result.get("overallDescription", ""),
-                "overallRiskLevel": analysis_result.get("overallRiskLevel", "Low"),
-                "constructionSafety": analysis_result.get("constructionSafety") or {"summary": "", "issues": [], "recommendations": []},
-                "fireSafety": analysis_result.get("fireSafety") or {"summary": "", "issues": [], "recommendations": []},
-                "propertySecurity": analysis_result.get("propertySecurity") or {"summary": "", "issues": [], "recommendations": []},
-                "peopleCount": analysis_result.get("peopleCount"),
-                "missingHardhats": analysis_result.get("missingHardhats"),
-                "missingVests": analysis_result.get("missingVests"),
-            },
-        }
+        payload = build_edge_report_json_body(
+            camera_id,
+            camera_name or camera_id,
+            analysis_result,
+        )
 
         def _b64url(data: bytes) -> str:
             return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
