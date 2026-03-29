@@ -1,7 +1,7 @@
 [Unit]
 Description=Edge AI Python Backend (local workspace)
-After=network-online.target
-Wants=network-online.target
+After=network-online.target edge-cloud-local.service
+Wants=network-online.target edge-cloud-local.service
 
 [Service]
 Type=simple
@@ -11,7 +11,7 @@ WorkingDirectory=/home/iris/Documents/development/edge-linux/python
 # Deep Vision + CMP webhook run here; PPE-UI is optional. Keep edge-cloud (Gemini) running — e.g. Wants=edge-cloud-local.service. Local CMP app: CCTVCMP-linux/
 Environment=PYTHONUNBUFFERED=1
 Environment=YOLO_DEVICE=cpu
-Environment=GEMINI_REQUIRE_VPN=true
+Environment=GEMINI_REQUIRE_VPN=false
 # Optional: full URL to POST /api/analyze-image (default http://127.0.0.1:3001/api/analyze-image)
 # Environment=EDGE_CLOUD_ANALYZE_URL=http://127.0.0.1:3001/api/analyze-image
 ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
