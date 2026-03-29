@@ -58,7 +58,7 @@
     "cmp": "eth1"
   },
   "vpn": {
-    "enabled": true,
+    "enabled": false,
     "interface": "mullvad",
     "provider": "mullvad"
   }
