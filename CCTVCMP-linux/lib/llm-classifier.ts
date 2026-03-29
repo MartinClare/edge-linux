@@ -275,15 +275,6 @@ function classifyPPE(analysis: AnalysisPayload): Classification {
   };
 }
 
-function mapOverallRisk(level: string): IncidentRiskLevel {
-  switch (level) {
-    case "Critical": return "critical";
-    case "High": return "high";
-    case "Medium": return "medium";
-    case "Low": return "low";
-    default: return "low";
-  }
-}
 
 /**
  * Use LLM to classify natural language categories.
