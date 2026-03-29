@@ -109,6 +109,55 @@ def _load_runtime_config() -> dict:
         return {}
 
 
+def _merge_config_section(existing: object, incoming: object) -> object:
+    """Shallow-merge dict sections so PPE-UI saves preserve unknown fields."""
+    if isinstance(existing, dict) and isinstance(incoming, dict):
+        merged = dict(existing)
+        merged.update(incoming)
+        return merged
+    return incoming
+
+
+def _merge_rtsp_cameras(existing_cameras: object, incoming_cameras: object) -> list:
+    """Preserve extra per-camera fields while applying PPE-UI camera edits."""
+    existing_by_id: dict[str, dict] = {}
+    if isinstance(existing_cameras, list):
+        for item in existing_cameras:
+            if isinstance(item, dict):
+                camera_id = item.get("id")
+                if isinstance(camera_id, str) and camera_id:
+                    existing_by_id[camera_id] = item
+
+    merged_cameras: list[dict] = []
+    if not isinstance(incoming_cameras, list):
+        return merged_cameras
+
+    for item in incoming_cameras:
+        if not isinstance(item, dict):
+            continue
+        camera_id = item.get("id")
+        if isinstance(camera_id, str) and camera_id and camera_id in existing_by_id:
+            merged = dict(existing_by_id[camera_id])
+            merged.update(item)
+            merged_cameras.append(merged)
+        else:
+            merged_cameras.append(item)
+
+    return merged_cameras
+
+
+def _sanitise_config_for_frontend(config: object) -> object:
+    """Redact backend-only secrets before returning config to PPE-UI."""
+    if not isinstance(config, dict):
+        return config
+    safe = json.loads(json.dumps(config))
+    central = safe.get("centralServer")
+    if isinstance(central, dict):
+        central.pop("apiKey", None)
+        central.pop("vercelBypassToken", None)
+    return safe
+
+
 def _capture_jpeg_from_rtsp(rtsp_url: str) -> Optional[bytes]:
     from .realtime_stream import _cv2_lock
     cap = None
@@ -297,7 +346,8 @@ async def _heartbeat_loop():
                 for cam in enabled_cameras:
                     camera_id = cam.get("id", cam.get("name", "unknown"))
                     camera_name = cam.get("name", camera_id)
-                    observer.send_keepalive(camera_id, camera_name)
+                    camera_stream_url = cam.get("url", "")
+                    observer.send_keepalive(camera_id, camera_name, camera_stream_url)
 
         except asyncio.CancelledError:
             logger.info("Heartbeat loop stopped")
@@ -373,6 +423,7 @@ async def _deepvision_background_loop():
                     camera_id,
                     camera_name,
                     frame_jpeg,  # forward JPEG to CMP so images appear in Edge Devices / Incidents
+                    rtsp_url,
                 )
 
             await asyncio.sleep(interval)
@@ -1199,39 +1250,58 @@ def _apply_tailscale(enabled: bool, mode: str = "inbound") -> None:
         logger.warning("Tailscale apply failed: %s", e)
 
 
-# Services we report status for (systemd unit names)
+# Services we report status for in the PPE-UI Settings modal.
+# Support both the older install names (`edge-python`, `edge-ui`, `edge-cloud`)
+# and the current local-workspace names (`edge-python-local`, etc.).
+#
+# The UI should show the service as Running when ANY matching unit is active.
 _CONFIG_SERVICES = [
-    ("edge-python", "Python backend"),
-    ("edge-ui", "PPE UI"),
-    ("edge-cloud", "Cloud Vision API"),
-    ("wg-mullvad", "VPN (Mullvad)"),
-    ("tailscaled", "Tailscale"),
+    (["edge-python-local", "edge-python"], "Python backend"),
+    (["edge-ui-local", "edge-ui"], "PPE UI"),
+    (["edge-cloud-local", "edge-cloud"], "Cloud Vision API"),
+    (["wg-mullvad"], "VPN (Mullvad)"),
+    (["tailscaled"], "Tailscale"),
 ]
 
 
-def _get_service_status(unit: str) -> str:
-    """Return systemd unit state: active, inactive, failed, or unknown."""
-    try:
-        r = subprocess.run(
-            ["systemctl", "is-active", unit],
-            timeout=5,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        return (r.stdout or "").strip() or "inactive"
-    except Exception:
-        return "unknown"
+def _get_service_status(units: list[str]) -> str:
+    """Return merged systemd state across one or more candidate units.
+
+    Precedence:
+      active > failed > activating > reloading > inactive > unknown
+
+    This lets the PPE-UI show a correct status even when the local workspace
+    uses `*-local` unit names but older installs use the legacy names.
+    """
+    states: list[str] = []
+    for unit in units:
+        try:
+            r = subprocess.run(
+                ["systemctl", "is-active", unit],
+                timeout=5,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            states.append((r.stdout or "").strip() or "inactive")
+        except Exception:
+            states.append("unknown")
+
+    for preferred in ["active", "failed", "activating", "reloading", "inactive"]:
+        if preferred in states:
+            return preferred
+    return states[0] if states else "unknown"
 
 
 @app.get("/api/services/status")
 async def get_services_status():
     """Return status of all config-related systemd services for the PPE-UI."""
     result = {}
-    for unit, label in _CONFIG_SERVICES:
-        result[unit] = {
+    for units, label in _CONFIG_SERVICES:
+        key = units[0]
+        result[key] = {
             "label": label,
-            "status": _get_service_status(unit),
+            "status": _get_service_status(units),
         }
     return result
 
@@ -1244,7 +1314,7 @@ async def get_app_config():
         if not path_root.exists():
             raise HTTPException(status_code=404, detail="app.config.json not found")
         with open(path_root, "r", encoding="utf-8") as f:
-            return json.load(f)
+            return _sanitise_config_for_frontend(json.load(f))
     except HTTPException:
         raise
     except Exception as e:
@@ -1296,7 +1366,7 @@ async def update_app_config(request: Request):
                 raise HTTPException(status_code=400, detail="rtsp.cameras is required when rtsp is provided")
             if "rtsp" not in config:
                 config["rtsp"] = {}
-            config["rtsp"]["cameras"] = rtsp["cameras"]
+            config["rtsp"]["cameras"] = _merge_rtsp_cameras(config["rtsp"].get("cameras", []), rtsp["cameras"])
             if "fpsLimit" in rtsp:
                 config["rtsp"]["fpsLimit"] = rtsp["fpsLimit"]
             if "geminiInterval" in rtsp:
@@ -1305,14 +1375,15 @@ async def update_app_config(request: Request):
                 config["rtsp"]["autoStart"] = rtsp["autoStart"]
 
         if "centralServer" in body:
-            config["centralServer"] = body["centralServer"]
+            config["centralServer"] = _merge_config_section(config.get("centralServer"), body["centralServer"])
         if "vpn" in body:
-            vpn_in = body.get("vpn") or {}
-            config["vpn"] = {"enabled": bool(vpn_in.get("enabled", True))}
+            config["vpn"] = _merge_config_section(config.get("vpn"), body.get("vpn") or {})
+            if isinstance(config["vpn"], dict):
+                config["vpn"]["enabled"] = bool(config["vpn"].get("enabled", True))
         if "tailscale" in body:
-            config["tailscale"] = body["tailscale"]
+            config["tailscale"] = _merge_config_section(config.get("tailscale"), body["tailscale"])
         if "network" in body:
-            config["network"] = body["network"]
+            config["network"] = _merge_config_section(config.get("network"), body["network"])
         if "ui" in body:
             if not isinstance(config.get("ui"), dict):
                 config["ui"] = {}

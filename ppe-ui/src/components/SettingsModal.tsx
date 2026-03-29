@@ -23,7 +23,6 @@ interface AppSettings {
   centralServer: {
     enabled: boolean;
     url: string;
-    apiKey: string;
   };
   vpn: { enabled: boolean };
   tailscale: {
@@ -40,7 +39,6 @@ interface SettingsModalProps {
   configDeepVisionEnabled: boolean;
   configCmpEnabled: boolean;
   configCmpUrl: string;
-  configCmpApiKey: string;
   configVpnEnabled: boolean;
   configTailscaleEnabled: boolean;
   configTailscaleMode: 'inbound' | 'outbound';
@@ -56,7 +54,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   configDeepVisionEnabled,
   configCmpEnabled,
   configCmpUrl,
-  configCmpApiKey,
   configVpnEnabled,
   configTailscaleEnabled,
   configTailscaleMode,
@@ -74,7 +71,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [deepVisionEnabled, setDeepVisionEnabled] = useState(configDeepVisionEnabled);
   const [cmpEnabled, setCmpEnabled] = useState(configCmpEnabled);
   const [cmpUrl, setCmpUrl] = useState(configCmpUrl);
-  const [cmpApiKey, setCmpApiKey] = useState(configCmpApiKey);
   const [vpnEnabled, setVpnEnabled] = useState(configVpnEnabled);
   const [tailscaleEnabled, setTailscaleEnabled] = useState(configTailscaleEnabled);
   const [tailscaleMode, setTailscaleMode] = useState<'inbound' | 'outbound'>(configTailscaleMode);
@@ -175,7 +171,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       centralServer: {
         enabled: cmpEnabled,
         url: cmpUrl.trim(),
-        apiKey: cmpApiKey.trim(),
       },
       vpn: { enabled: vpnEnabled },
       tailscale: {
@@ -244,7 +239,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setDeepVisionEnabled(configDeepVisionEnabled);
       setCmpEnabled(configCmpEnabled);
       setCmpUrl(configCmpUrl);
-      setCmpApiKey(configCmpApiKey);
       setVpnEnabled(configVpnEnabled);
       setTailscaleEnabled(configTailscaleEnabled);
       setTailscaleMode(configTailscaleMode);
@@ -611,30 +605,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', color: 'rgba(255,255,255,0.9)', fontSize: '0.9rem' }}>
-                  CMP API Key
-                </label>
-                <small style={{ display: 'block', marginBottom: '0.35rem', color: 'rgba(255,255,255,0.55)', fontSize: '0.75rem' }}>
-                  Sent as header <code style={{ color: '#00d9ff' }}>X-API-Key</code>. Must match CMP env <code style={{ color: '#00d9ff' }}>EDGE_API_KEY</code>.
+                <small style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: '0.75rem' }}>
+                  CMP secrets such as the API key and Vercel bypass token are backend-managed and are no longer editable from PPE-UI.
                 </small>
-                <input
-                  type="text"
-                  value={cmpApiKey}
-                  onChange={(e) => {
-                    setCmpApiKey(e.target.value);
-                    setHasChanges(true);
-                  }}
-                  placeholder="Same value as EDGE_API_KEY on the CMP server"
-                  style={{
-                    width: '100%',
-                    padding: '0.5rem',
-                    borderRadius: '4px',
-                    border: '1px solid rgba(0, 217, 255, 0.3)',
-                    background: 'rgba(0, 0, 0, 0.3)',
-                    color: '#fff',
-                    fontSize: '0.9rem'
-                  }}
-                />
               </div>
 
               {/* VPN (Mullvad) */}

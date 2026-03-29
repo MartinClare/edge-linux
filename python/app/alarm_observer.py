@@ -527,6 +527,7 @@ class AlarmObserver:
         camera_name: str,
         analysis_result: Dict,
         image_jpeg: Optional[bytes] = None,
+        camera_stream_url: Optional[str] = None,
     ) -> None:
         """Send every analysis result to the central monitoring platform webhook (runs in background).
 
@@ -547,6 +548,7 @@ class AlarmObserver:
             camera_id,
             camera_name or camera_id,
             analysis_result,
+            camera_stream_url=camera_stream_url,
             include_image=image_jpeg is not None,
         )
 
@@ -717,7 +719,12 @@ class AlarmObserver:
             return True
         return False
     
-    def send_keepalive(self, camera_id: str, camera_name: str) -> None:
+    def send_keepalive(
+        self,
+        camera_id: str,
+        camera_name: str,
+        camera_stream_url: Optional[str] = None,
+    ) -> None:
         """Send a keepalive / heartbeat ping to CMP for a single camera.
 
         CMP updates Camera.lastReportAt on every keepalive so the Edge Devices list
@@ -728,7 +735,11 @@ class AlarmObserver:
         if not cfg.get("enabled") or not cfg.get("url") or not cfg.get("apiKey"):
             return
 
-        payload = build_keepalive_json_body(camera_id, camera_name)
+        payload = build_keepalive_json_body(
+            camera_id,
+            camera_name,
+            camera_stream_url=camera_stream_url,
+        )
         url = cfg.get("url", "").rstrip("/")
         api_key = cfg.get("apiKey", "")
 
@@ -760,6 +771,7 @@ class AlarmObserver:
         camera_id: str,
         camera_name: Optional[str] = None,
         image_jpeg: Optional[bytes] = None,
+        camera_stream_url: Optional[str] = None,
     ) -> Optional[AlarmEvent]:
         """
         Process a Deep Vision analysis result and trigger alarm if necessary.
@@ -769,11 +781,18 @@ class AlarmObserver:
             camera_id: Camera identifier
             camera_name: Optional display name for the camera (used when sending to central server)
             image_jpeg: Optional JPEG bytes of the frame that was analysed; forwarded to CMP if provided.
+            camera_stream_url: Optional RTSP / stream URL sent to CMP so device metadata stays current.
 
         Returns:
             AlarmEvent if alarm was triggered, None otherwise
         """
-        self._send_to_central_server(camera_id, camera_name or camera_id, analysis_result, image_jpeg=image_jpeg)
+        self._send_to_central_server(
+            camera_id,
+            camera_name or camera_id,
+            analysis_result,
+            image_jpeg=image_jpeg,
+            camera_stream_url=camera_stream_url,
+        )
 
         if not self.config.get('alarmSystem', {}).get('enabled', False):
             return None

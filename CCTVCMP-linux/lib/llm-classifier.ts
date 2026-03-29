@@ -89,6 +89,7 @@ Strict rules:
 4. Do NOT use peopleCount to decide severity; it is not reliable enough.
 5. For PPE, only detect ppe_violation when the edge explicitly describes missing PPE or PPE-violation detections.
 6. For fire_detected, require the edge to mention active fire/flame/burning — not only smoke.
+7. If the edge description says the view is wide, distant, overview-only, or that PPE is unclear / not verifiable, DO NOT detect ppe_violation.
 
 Risk rules:
 - ppe_violation    → "high" when edge clearly reports missing PPE
@@ -200,6 +201,36 @@ function shouldSkipLLM(analysis: AnalysisPayload): boolean {
   return noIssueText && ppeClean && !hasHazardDetections;
 }
 
+function isWideOrUnclearForPPE(analysis: AnalysisPayload): boolean {
+  const text = [
+    analysis.overallDescription,
+    analysis.constructionSafety.summary,
+    ...(analysis.constructionSafety.issues ?? []),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  const unclearSignals = [
+    "wide view",
+    "wide-angle",
+    "overview",
+    "distant",
+    "far away",
+    "too far",
+    "too small",
+    "small figures",
+    "not clear",
+    "unclear",
+    "cannot verify ppe",
+    "ppe not visible",
+    "ppe unclear",
+    "cannot clearly see",
+    "not possible to verify ppe",
+  ];
+
+  return unclearSignals.some((signal) => text.includes(signal));
+}
+
 /**
  * CMP's own PPE risk assessment — independent of the edge's overallRiskLevel.
  *
@@ -209,6 +240,16 @@ function shouldSkipLLM(analysis: AnalysisPayload): boolean {
  * alarm rules / UI handle severity policy.
  */
 function classifyPPE(analysis: AnalysisPayload): Classification {
+  if (isWideOrUnclearForPPE(analysis)) {
+    return {
+      type: "ppe_violation",
+      detected: false,
+      riskLevel: "low",
+      confidence: 0.9,
+      reasoning: "PPE not assessed because the edge described a wide or unclear view",
+    };
+  }
+
   const missingHats = analysis.missingHardhats ?? 0;
   const missingVests = analysis.missingVests ?? 0;
   const missingNumeric = missingHats + missingVests;

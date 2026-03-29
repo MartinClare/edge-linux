@@ -82,7 +82,7 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
   const [frameCount, setFrameCount] = useState(0);
   const [fps, setFps] = useState(0);
   const [detections, setDetections] = useState<Detection[]>([]);
-  const [allDetections, setAllDetections] = useState<Detection[]>([]);
+  const [, setAllDetections] = useState<Detection[]>([]);
   const [lastGeminiTime, setLastGeminiTime] = useState(0);
   const [geminiAnalyzing, setGeminiAnalyzing] = useState(false);
   const [latestGeminiResult, setLatestGeminiResult] = useState<GeminiAnalysisResult | null>(null);
@@ -117,9 +117,10 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
 
   // Track component lifecycle
   useEffect(() => {
-    console.log(`[RTSP-${cameraId}] 🟢 Component MOUNTED (${mountIdRef.current})`);
+    const mountId = mountIdRef.current;
+    console.log(`[RTSP-${cameraId}] 🟢 Component MOUNTED (${mountId})`);
     return () => {
-      console.log(`[RTSP-${cameraId}] 🔴 Component UNMOUNTING (${mountIdRef.current})`);
+      console.log(`[RTSP-${cameraId}] 🔴 Component UNMOUNTING (${mountId})`);
       autoStartTriggeredRef.current = false; // Reset so remount can auto-start again
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);

@@ -17,7 +17,7 @@ interface CameraConfig {
 interface CentralServerConfig {
   enabled: boolean;
   url: string;
-  apiKey: string;
+  apiKey?: string;
 }
 
 interface VpnConfig {
@@ -132,6 +132,7 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
     }, 1000); // Check every second
 
     return () => clearInterval(rotationInterval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysisMode, enabledCameras, cameraEnabled, currentAnalysisCameraId, lastAnalysisTime, geminiInterval]);
 
   const handleGeminiResult = useCallback((cameraId: string, result: GeminiAnalysisResult | null) => {
@@ -864,7 +865,6 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
           configDeepVisionEnabled={config.ui?.deepVisionEnabled !== false}
           configCmpEnabled={config.centralServer?.enabled ?? false}
           configCmpUrl={config.centralServer?.url ?? ''}
-          configCmpApiKey={config.centralServer?.apiKey ?? ''}
           configVpnEnabled={config.vpn?.enabled ?? true}
           configTailscaleEnabled={config.tailscale?.enabled ?? true}
           configTailscaleMode={config.tailscale?.mode ?? 'inbound'}

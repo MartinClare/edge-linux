@@ -121,11 +121,15 @@ function normalizeEdgeWebhookPayload(raw: unknown): unknown {
   if (hasNestedAnalysis) {
     const edgeCameraId = o.edgeCameraId ?? o.edge_camera_id;
     const cameraName = o.cameraName ?? o.camera_name ?? "";
+    const streamUrl = typeof (o.streamUrl ?? o.stream_url ?? o.cameraAddress ?? o.camera_address) === "string"
+      ? String(o.streamUrl ?? o.stream_url ?? o.cameraAddress ?? o.camera_address)
+      : "";
     return {
       ...o,
       timestamp,
       edgeCameraId: typeof edgeCameraId === "string" ? edgeCameraId : o.edgeCameraId,
       cameraName: typeof cameraName === "string" ? cameraName : "",
+      streamUrl,
       messageType,
       keepalive: isKeepalive,
       eventImageIncluded: o.eventImageIncluded === true,
@@ -139,10 +143,15 @@ function normalizeEdgeWebhookPayload(raw: unknown): unknown {
   }
 
   const cameraName = typeof (o.cameraName ?? o.camera_name) === "string" ? String(o.cameraName ?? o.camera_name) : "";
+  const streamUrl =
+    typeof (o.streamUrl ?? o.stream_url ?? o.cameraAddress ?? o.camera_address) === "string"
+      ? String(o.streamUrl ?? o.stream_url ?? o.cameraAddress ?? o.camera_address)
+      : "";
 
   return {
     edgeCameraId: edgeCameraId.trim(),
     cameraName,
+    streamUrl,
     timestamp,
     messageType,
     keepalive: isKeepalive,
@@ -166,6 +175,7 @@ export const edgeReportSchema = z.preprocess(
     .object({
       edgeCameraId: z.string().min(1),
       cameraName: z.string().default(""),
+      streamUrl: z.string().default(""),
       timestamp: z.string(),
       messageType: z.enum(["analysis", "keepalive"]).default("analysis"),
       keepalive: z.boolean().default(false),

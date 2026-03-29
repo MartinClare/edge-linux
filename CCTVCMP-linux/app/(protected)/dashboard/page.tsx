@@ -4,8 +4,7 @@ import { EdgeStatusPanel } from "@/components/dashboard/edge-status-panel";
 import { RiskBreakdown } from "@/components/dashboard/risk-breakdown";
 import { AlertFeed } from "@/components/dashboard/alert-feed";
 import { AutoRefresh } from "@/components/auto-refresh";
-
-const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
+import { ONLINE_THRESHOLD_MS } from "@/lib/camera-status";
 
 const CATEGORY_MAP: Record<string, { category: string; icon: string }> = {
   ppe_violation: { category: "PPE", icon: "🪖" },
@@ -43,6 +42,7 @@ export default async function DashboardPage() {
     id: cam.id,
     name: cam.name,
     edgeCameraId: cam.edgeCameraId,
+    streamUrl: cam.streamUrl,
     status: cam.status,
     lastReportAt: cam.lastReportAt?.toISOString() ?? null,
     isOnline:

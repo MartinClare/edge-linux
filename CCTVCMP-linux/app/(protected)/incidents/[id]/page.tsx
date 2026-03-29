@@ -162,25 +162,6 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
         </CardContent>
       </Card>
 
-      {/* Timeline */}
-      <Card>
-        <CardHeader><CardTitle className="text-sm">Timeline</CardTitle></CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {incident.logs.map((log) => (
-              <div key={log.id} className="flex items-start gap-3 text-sm">
-                <div className="mt-0.5 h-2 w-2 rounded-full bg-primary shrink-0" />
-                <div>
-                  <span className="font-medium">{log.action.replace("_", " ")}</span>
-                  <span className="text-muted-foreground"> by {log.user.name}</span>
-                  <p className="text-xs text-muted-foreground">{formatHKT(log.timestamp)}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Notification History */}
       {incident.notificationLogs.length > 0 && (
         <Card>

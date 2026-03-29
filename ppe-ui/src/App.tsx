@@ -3,7 +3,6 @@ import LoginPage from './components/LoginPage';
 import InputPanel from './components/InputPanel';
 import ImageUpload from './components/ImageUpload';
 import VideoUpload from './components/VideoUpload';
-import RTSPStream from './components/RTSPStream';
 import MultiCameraGrid, { type MultiCameraGridHandle } from './components/MultiCameraGrid';
 import MonitoringDashboard from './components/MonitoringDashboard';
 import GeminiPpeNarrative from './components/GeminiPpeNarrative';
@@ -12,8 +11,6 @@ import VideoPlayer from './components/VideoPlayer';
 import AlarmObserverPanel from './components/AlarmObserverPanel';
 import { detectImageYOLO, detectRTSPYOLO } from './services/yoloApi';
 import { analyzeImageGemini, analyzeImageAlerts } from './services/geminiApi';
-import { analyzeVideo } from './services/videoApi';
-import { analyzeVideoStreaming } from './services/videoStreamingApi';
 import { YOLO_API_URL } from './config/api';
 import type {
   InputSource,
@@ -55,7 +52,7 @@ function App() {
   const [alertResult, setAlertResult] = useState<AlertAnalysisResult | null>(null);
   const [videoResult, setVideoResult] = useState<VideoAnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [yoloFps, setYoloFps] = useState<number>(15); // Default 15fps for real-time YOLO analysis
+  const [yoloFps] = useState<number>(15); // Default 15fps for real-time YOLO analysis
   const [currentAnalysisCameraId, setCurrentAnalysisCameraId] = useState<string | null>(null); // Track which camera sent the result
   const [currentAnalysisCameraName, setCurrentAnalysisCameraName] = useState<string | null>(null);
   const multiCameraGridRef = useRef<MultiCameraGridHandle>(null);
@@ -160,12 +157,10 @@ function App() {
 
     try {
       // Use appropriate API based on whether we have a file or file path
-      let result: VideoAnalysisResult;
-      
       if (filePath) {
         // Use folder-based API (no upload needed)
         const { analyzeVideoFile } = await import('./services/videoFolderApi');
-        result = await analyzeVideoFile(
+        await analyzeVideoFile(
           filePath,
           sampleEvery,
           geminiInterval,
@@ -233,7 +228,7 @@ function App() {
       } else if (selectedFile) {
         // Use file upload API
         const { analyzeVideoStreaming } = await import('./services/videoStreamingApi');
-        result = await analyzeVideoStreaming(
+        await analyzeVideoStreaming(
           selectedFile,
           sampleEvery,
           geminiInterval,
@@ -319,7 +314,8 @@ function App() {
     }
   };
 
-  const handleRTSPConnect = async (url: string, maxFrames: number, sampleEvery: number) => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _handleRTSPConnect = async (url: string, maxFrames: number, sampleEvery: number) => {
     setIsAnalyzing(true);
     setError(null);
     setProgress(0);

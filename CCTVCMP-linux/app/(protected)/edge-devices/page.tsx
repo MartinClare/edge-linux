@@ -10,6 +10,7 @@ export default async function EdgeDevicesPage() {
     include: {
       project: { select: { id: true, name: true } },
       zone: { select: { id: true, name: true } },
+      // streamUrl is refreshed from every edge keepalive / report
       edgeReports: {
         orderBy: { receivedAt: "desc" },
         take: 10,
@@ -45,6 +46,7 @@ export default async function EdgeDevicesPage() {
       id: cam.id,
       name: cam.name,
       edgeCameraId: cam.edgeCameraId,
+      streamUrl: cam.streamUrl,
       status: cam.status,
       lastReportAt: cam.lastReportAt?.toISOString() ?? null,
       createdAt: cam.createdAt.toISOString(),

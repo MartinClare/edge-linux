@@ -14,14 +14,6 @@
     "cameras": [
       {
         "id": "camera1",
-        "name": "site_b_01",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_01",
-        "enabled": true,
-        "tailscaleUrl": "",
-        "useTailscale": false
-      },
-      {
-        "id": "camera2",
         "name": "site_b_02",
         "url": "rtsp://fnnas.cccl4s.com:8554/site_b_02",
         "enabled": true,
@@ -29,17 +21,25 @@
         "useTailscale": false
       },
       {
+        "id": "camera2",
+        "name": "site_b_08",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_08",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
         "id": "camera3",
-        "name": "site_b_03",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_03",
+        "name": "site_b_09",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_09",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
       },
       {
         "id": "camera4",
-        "name": "site_b_05",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_05",
+        "name": "site_b_11",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_11",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
@@ -66,7 +66,7 @@
     "cmp": "eth1"
   },
   "vpn": {
-    "enabled": false
+    "enabled": true
   },
   "tailscale": {
     "enabled": true,

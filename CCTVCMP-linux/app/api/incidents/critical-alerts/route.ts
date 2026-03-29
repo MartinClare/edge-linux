@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
   const incidents = await prisma.incident.findMany({
     where: {
       type: { in: [...CRITICAL_ALERT_TYPES] as import("@prisma/client").IncidentType[] },
+      riskLevel: { in: ["high", "critical"] },
       status: { in: ["open"] },
       detectedAt: { gt: since },
     },

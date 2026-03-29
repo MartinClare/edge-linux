@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
   const now = Date.now();
   const data = cameras.map((cam) => ({
     ...cam,
+    streamUrl: cam.streamUrl,
     isOnline:
       cam.status !== "maintenance" &&
       cam.lastReportAt != null &&

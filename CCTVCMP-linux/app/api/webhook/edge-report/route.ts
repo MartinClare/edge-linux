@@ -278,6 +278,7 @@ export async function POST(request: NextRequest) {
   const {
     edgeCameraId,
     cameraName,
+    streamUrl,
     timestamp,
     messageType,
     keepalive,
@@ -315,8 +316,9 @@ export async function POST(request: NextRequest) {
     }
     camera = await prisma.camera.create({
       data: {
-        name: cameraName,
+        name: cameraName || edgeCameraId,
         edgeCameraId,
+        streamUrl: streamUrl.trim() || null,
         projectId: project.id,
         zoneId: zone.id,
       },
@@ -342,6 +344,7 @@ export async function POST(request: NextRequest) {
   const fullPayload = {
     edgeCameraId,
     cameraName,
+    streamUrl,
     timestamp,
     messageType,
     keepalive,
@@ -381,12 +384,17 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // --- 2. Update Camera.lastReportAt and sync name from edge ---
+  // --- 2. Update Camera.lastReportAt and sync current edge metadata ---
   // Use CMP server receive time (new Date()), NOT the edge device's timestamp.
   // This ensures clock drift on the edge box never causes false-offline readings.
   await prisma.camera.update({
     where: { id: camera.id },
-    data: { lastReportAt: new Date(), status: "online", name: cameraName },
+    data: {
+      lastReportAt: new Date(),
+      status: "online",
+      name: cameraName || camera.name,
+      streamUrl: streamUrl.trim() || camera.streamUrl,
+    },
   });
 
   // --- 3. Fire background processing for ALL analysis reports (CMP decides severity) ---

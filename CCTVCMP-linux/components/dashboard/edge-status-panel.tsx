@@ -7,6 +7,7 @@ type DeviceStatus = {
   id: string;
   name: string;
   edgeCameraId: string | null;
+  streamUrl: string | null;
   isOnline: boolean;
   status: string;
   lastReportAt: string | null;
@@ -72,6 +73,12 @@ export function EdgeStatusPanel({ devices }: { devices: DeviceStatus[] }) {
               {d.latestDescription && (
                 <p className="text-xs text-muted-foreground line-clamp-2 mb-1">
                   {d.latestDescription}
+                </p>
+              )}
+              {(d.edgeCameraId || d.streamUrl) && (
+                <p className="text-[11px] text-muted-foreground line-clamp-1 mb-1">
+                  {d.edgeCameraId ?? "—"}
+                  {d.streamUrl ? ` · ${d.streamUrl}` : ""}
                 </p>
               )}
               <p className="text-xs text-muted-foreground">

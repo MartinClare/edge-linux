@@ -10,6 +10,7 @@ type Device = {
   id: string;
   name: string;
   edgeCameraId: string | null;
+  streamUrl: string | null;
   status: string;
   lastReportAt: string | null;
   createdAt: string;
@@ -169,6 +170,13 @@ export function EdgeDeviceList({ devices }: { devices: Device[] }) {
                 {d.project?.name ?? "—"}
                 {d.zone?.name ? ` · ${d.zone.name}` : ""}
               </p>
+
+              {(d.edgeCameraId || d.streamUrl) && (
+                <p className="text-[11px] text-muted-foreground/80 truncate">
+                  {d.edgeCameraId ?? "—"}
+                  {d.streamUrl ? ` · ${d.streamUrl}` : ""}
+                </p>
+              )}
 
               {/* Latest description */}
               {d.latestReport?.overallDescription && (

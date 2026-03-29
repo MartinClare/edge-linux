@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import type { VideoAnalysisResult, FrameDetection, Detection, GeminiFrameAnalysis } from '../types/detection.types';
+import type { VideoAnalysisResult, FrameDetection, GeminiFrameAnalysis } from '../types/detection.types';
 import { detectImageYOLO } from '../services/yoloApi';
 import GeminiPpeNarrative from './GeminiPpeNarrative';
 
@@ -100,6 +100,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         hasAnalysis: !!currentGeminiAnalysis.analysis,
       } : null,
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [geminiAnalyses.length, currentTime, persistedGeminiAnalysis, currentGeminiAnalysis]);
 
   // Extract frame from video and send to YOLO API
@@ -358,6 +359,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       console.log(`⚠️ No Gemini analyses available. Total: ${geminiAnalyses.length}`);
     }
     // Don't clear persistedGeminiAnalysis when no match - keep showing the last one
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTime, preAnalyzedYoloFrames, realTimeYoloFrames, geminiAnalyses, stats.fps, stats.duration, yoloFps]);
 
   // Draw bounding boxes on canvas - updates as video plays and loops

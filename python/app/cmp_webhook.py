@@ -49,6 +49,7 @@ def build_keepalive_json_body(
     edge_camera_id: str,
     camera_name: str,
     *,
+    camera_stream_url: Optional[str] = None,
     timestamp_iso: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
@@ -57,13 +58,16 @@ def build_keepalive_json_body(
     CMP stores it as messageType='keepalive' and updates Camera.lastReportAt so the
     Edge Devices list shows the camera as online even when no new analysis is ready.
     """
-    return {
+    payload = {
         "edgeCameraId": edge_camera_id,
         "cameraName": camera_name or edge_camera_id,
         "timestamp": timestamp_iso or utc_iso_timestamp_z(),
         "messageType": "keepalive",
         "keepalive": True,
     }
+    if camera_stream_url:
+        payload["streamUrl"] = camera_stream_url
+    return payload
 
 
 def build_edge_report_json_body(
@@ -71,6 +75,7 @@ def build_edge_report_json_body(
     camera_name: str,
     analysis_result: Mapping[str, Any],
     *,
+    camera_stream_url: Optional[str] = None,
     timestamp_iso: Optional[str] = None,
     include_image: bool = False,
 ) -> Dict[str, Any]:
@@ -100,10 +105,13 @@ def build_edge_report_json_body(
     if isinstance(detections, list):
         analysis["detections"] = detections
 
-    return {
+    payload = {
         "edgeCameraId": edge_camera_id,
         "cameraName": camera_name or edge_camera_id,
         "timestamp": ts,
         "eventImageIncluded": include_image,
         "analysis": analysis,
     }
+    if camera_stream_url:
+        payload["streamUrl"] = camera_stream_url
+    return payload

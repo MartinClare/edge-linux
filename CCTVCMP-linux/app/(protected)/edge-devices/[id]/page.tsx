@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { EdgeDeviceActions } from "@/components/edge-devices/edge-device-actions";
-import { StreamUrlForm } from "@/components/edge-devices/stream-url-form";
 import { EdgeDeviceReportFeed } from "@/components/edge-devices/edge-device-report-feed";
 import { CameraSnapshot } from "@/components/edge-devices/camera-snapshot";
 import { ONLINE_THRESHOLD_MS } from "@/lib/camera-status";
@@ -91,6 +90,9 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
             {camera.edgeCameraId ?? "—"} · {camera.project.name}
             {camera.zone ? ` · ${camera.zone.name}` : ""}
           </p>
+          {camera.streamUrl && (
+            <p className="text-xs text-muted-foreground break-all">{camera.streamUrl}</p>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {camera.status === "maintenance" ? (
@@ -119,6 +121,7 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <Row label="Last report" value={camera.lastReportAt ? formatHKT(camera.lastReportAt) : "Never"} />
+            <Row label="Edge address" value={camera.streamUrl ?? "—"} />
             <Row label="Total reports" value={String(camera._count.edgeReports)} />
             <Row label="Incidents" value={String(camera._count.incidents)} />
             {latestAnalysis && (
@@ -166,7 +169,7 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
           </CardContent>
         </Card>
 
-        {/* Latest snapshot + stream URL config */}
+        {/* Latest snapshot */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Latest Snapshot</CardTitle>
@@ -175,7 +178,9 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
             {/* CameraSnapshot auto-refreshes every 30 s and always shows the last
                 known good frame — never flashes to a placeholder during reload */}
             <CameraSnapshot snapshotUrl={snapshotUrl} />
-            <StreamUrlForm deviceId={camera.id} initialStreamUrl={camera.streamUrl} />
+            <p className="text-xs text-muted-foreground">
+              Edge address is synced automatically from the edge backend and cannot be edited here.
+            </p>
           </CardContent>
         </Card>
       </div>

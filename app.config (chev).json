@@ -15,25 +15,25 @@
       {
         "id": "camera1",
         "name": "Lobby",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_01",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_02",
         "enabled": true
       },
       {
         "id": "camera2",
         "name": "Front Door",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_02",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_08",
         "enabled": true
       },
       {
         "id": "camera3",
         "name": "Exit 3",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_03",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_09",
         "enabled": true
       },
       {
         "id": "camera4",
         "name": "Camera 4",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_05",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_11",
         "enabled": true
       }
     ],
@@ -58,7 +58,7 @@
     "cmp": "eth1"
   },
   "vpn": {
-    "enabled": false,
+    "enabled": true,
     "interface": "mullvad",
     "provider": "mullvad"
   }
