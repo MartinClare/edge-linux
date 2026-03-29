@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatHKT } from "@/lib/utils";
@@ -31,6 +32,33 @@ type Device = {
   incidentCount: number;
   reportCount: number;
 };
+
+/** Loads the latest stored camera snapshot from the DB image API.
+ *  Falls back to a camera icon placeholder if no image is stored yet. */
+function DeviceSnapshot({ deviceId, name }: { deviceId: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <SnapshotPlaceholder />;
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={`/api/edge-devices/${deviceId}/snapshot`}
+      alt={`${name} snapshot`}
+      className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function SnapshotPlaceholder() {
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-muted-foreground/40">
+      <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+      </svg>
+      <span className="text-xs">No snapshot yet</span>
+    </div>
+  );
+}
 
 function StatusDot({ device }: { device: Device }) {
   if (device.status === "maintenance") {
@@ -79,22 +107,9 @@ export function EdgeDeviceList({ devices }: { devices: Device[] }) {
       {devices.map((d) => (
         <Link key={d.id} href={`/edge-devices/${d.id}`} className="group block">
           <Card className="h-full transition-all duration-150 hover:border-primary/60 hover:shadow-md group-focus-visible:ring-2 ring-primary">
-            {/* Thumbnail */}
+            {/* Thumbnail — served from stored DB bytes via /api/edge-devices/[id]/snapshot */}
             <div className="relative overflow-hidden rounded-t-xl bg-muted/30 h-36">
-              {d.latestAlertEvidence?.eventImagePath ? (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={d.latestAlertEvidence.eventImagePath}
-                  alt={`${d.name} latest alert`}
-                  className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-muted-foreground/40">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-                  </svg>
-                </div>
-              )}
+              <DeviceSnapshot deviceId={d.id} name={d.name} />
               {/* Risk overlay badge */}
               {d.latestReport && (
                 <div className="absolute top-2 right-2">

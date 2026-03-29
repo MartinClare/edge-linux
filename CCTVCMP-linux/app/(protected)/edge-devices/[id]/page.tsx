@@ -59,9 +59,13 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
     now - camera.lastReportAt.getTime() < ONLINE_THRESHOLD_MS;
 
   const latestAnalysis = reports.find((r) => !r.keepalive && r.messageType !== "keepalive");
-  const latestAlertImage = reports.find(
-    (r) => !!r.eventImagePath && (r.cmpRiskLevel ?? r.overallRiskLevel) !== "Low"
-  );
+
+  // Check if any stored JPEG exists (served via /api/edge-devices/[id]/snapshot)
+  const hasStoredImage = await prisma.edgeReport.count({
+    where: { cameraId: camera.id, eventImageData: { not: null } },
+  }) > 0;
+
+  const snapshotUrl = `/api/edge-devices/${camera.id}/snapshot`;
 
   // Serialize dates for client components
   const serializedReports = reports.map((r) => ({
@@ -167,23 +171,27 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
           </CardContent>
         </Card>
 
-        {/* Latest alert image + stream URL config */}
+        {/* Latest snapshot + stream URL config */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Latest Alert Evidence</CardTitle>
+            <CardTitle className="text-sm">Latest Snapshot</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {latestAlertImage?.eventImagePath ? (
-              <a href={latestAlertImage.eventImagePath} target="_blank" rel="noreferrer">
+            {hasStoredImage ? (
+              <a href={snapshotUrl} target="_blank" rel="noreferrer">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={latestAlertImage.eventImagePath}
-                  alt="Alert evidence"
-                  className="w-full max-h-36 rounded border object-cover hover:opacity-90 transition-opacity"
+                  src={snapshotUrl}
+                  alt="Latest camera snapshot"
+                  className="w-full max-h-40 rounded border object-cover hover:opacity-90 transition-opacity bg-muted"
                 />
               </a>
             ) : (
-              <p className="text-xs text-muted-foreground italic">No alert images yet.</p>
+              <div className="w-full h-28 rounded border bg-muted flex flex-col items-center justify-center gap-1 text-muted-foreground">
+                <span className="text-2xl">📷</span>
+                <span className="text-xs">No snapshot yet</span>
+                <span className="text-xs opacity-60">Arrives with first analysis report</span>
+              </div>
             )}
             <StreamUrlForm deviceId={camera.id} initialStreamUrl={camera.streamUrl} />
           </CardContent>
