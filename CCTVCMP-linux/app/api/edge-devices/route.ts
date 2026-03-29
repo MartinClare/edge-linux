@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
-
-const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
+import { ONLINE_THRESHOLD_MS } from "@/lib/camera-status";
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUserFromRequest(request);

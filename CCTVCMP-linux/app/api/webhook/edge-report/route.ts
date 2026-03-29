@@ -382,9 +382,11 @@ export async function POST(request: NextRequest) {
   }
 
   // --- 2. Update Camera.lastReportAt and sync name from edge ---
+  // Use CMP server receive time (new Date()), NOT the edge device's timestamp.
+  // This ensures clock drift on the edge box never causes false-offline readings.
   await prisma.camera.update({
     where: { id: camera.id },
-    data: { lastReportAt: eventTimestamp, status: "online", name: cameraName },
+    data: { lastReportAt: new Date(), status: "online", name: cameraName },
   });
 
   // --- 3. Fire background processing for ALL analysis reports (CMP decides severity) ---

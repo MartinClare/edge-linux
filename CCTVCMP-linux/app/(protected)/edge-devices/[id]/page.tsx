@@ -11,8 +11,7 @@ import { EdgeDeviceActions } from "@/components/edge-devices/edge-device-actions
 import { StreamUrlForm } from "@/components/edge-devices/stream-url-form";
 import { EdgeDeviceReportFeed } from "@/components/edge-devices/edge-device-report-feed";
 import { CameraSnapshot } from "@/components/edge-devices/camera-snapshot";
-
-const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
+import { ONLINE_THRESHOLD_MS } from "@/lib/camera-status";
 
 export default async function EdgeDeviceDetailPage({ params }: { params: { id: string } }) {
   const camera = await prisma.camera.findUnique({

@@ -2,8 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { EdgeDeviceList } from "@/components/edge-devices/edge-device-list";
 import { RegisterDeviceForm } from "@/components/edge-devices/register-device-form";
 import { AutoRefresh } from "@/components/auto-refresh";
-
-const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
+import { ONLINE_THRESHOLD_MS } from "@/lib/camera-status";
 
 export default async function EdgeDevicesPage() {
   const [cameras, projects] = await Promise.all([

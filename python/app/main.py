@@ -271,15 +271,17 @@ def _build_alarm_payload(camera_id: str, camera_name: str, result: dict) -> dict
 
 
 async def _heartbeat_loop():
-    """Send a keepalive ping to CMP for every enabled camera every 60 seconds.
+    """Send a keepalive ping to CMP for every enabled camera every 30 seconds.
 
-    This keeps each camera 'online' in the CMP Edge Devices list even during quiet
-    periods (no new analysis), and acts as a liveness signal if Deep Vision is slow
-    or paused.  The interval is capped to 60 s so it always falls inside CMP's
-    5-minute online threshold.
+    CMP online threshold: 10 minutes  (lib/camera-status.ts → ONLINE_THRESHOLD_MS)
+    Heartbeat interval:   30 seconds  (this constant)
+    Ratio:                20×  — up to 19 consecutive missed pings before offline
+
+    Keep HEARTBEAT_INTERVAL_SECONDS well below the CMP threshold.
+    If you change one value, update the other to preserve the ≥ 10× ratio.
     """
-    HEARTBEAT_INTERVAL = 60  # seconds — must be < CMP's 5-minute online threshold
-    logger.info("Heartbeat loop started (60 s interval → CMP keepalive)")
+    HEARTBEAT_INTERVAL = 30  # seconds — CMP threshold is 10 min → ratio 20×
+    logger.info("Heartbeat loop started (30 s interval → CMP keepalive, threshold 10 min)")
     while True:
         try:
             cfg = _load_runtime_config()
