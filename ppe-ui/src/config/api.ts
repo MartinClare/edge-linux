@@ -2,13 +2,21 @@
  * API Configuration
  * Centralized configuration for all API endpoints.
  *
- * All API calls use same-origin relative URLs so nginx on port 3000
- * can reverse-proxy them to the correct backend service.
- * This means only port 3000 needs to be exposed externally.
+ * Priority:
+ * 1) Explicit REACT_APP_* env vars (build-time override)
+ * 2) Runtime host auto-discovery (same host, fixed backend ports)
+ *
+ * Auto-discovery avoids "stuck loading" when the UI is served on :3000
+ * without an nginx reverse-proxy in front.
  */
+const isBrowser = typeof window !== 'undefined';
+const protocol = isBrowser ? window.location.protocol : 'http:';
+const hostname = isBrowser ? window.location.hostname : 'localhost';
+const autoYoloBase = `${protocol}//${hostname}:8000`;
+const autoGeminiBase = `${protocol}//${hostname}:3001`;
 
-export const YOLO_API_URL   = process.env.REACT_APP_YOLO_API_URL   || '';
-export const GEMINI_API_URL = process.env.REACT_APP_GEMINI_API_URL || '';
+export const YOLO_API_URL = process.env.REACT_APP_YOLO_API_URL || autoYoloBase;
+export const GEMINI_API_URL = process.env.REACT_APP_GEMINI_API_URL || autoGeminiBase;
 
 /**
  * API Endpoints

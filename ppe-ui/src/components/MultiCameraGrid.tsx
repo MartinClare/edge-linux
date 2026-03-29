@@ -68,6 +68,8 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
   const [geminiInterval, setGeminiInterval] = useState<number>(5);
   const [autoStart, setAutoStart] = useState<boolean>(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [configLoadError, setConfigLoadError] = useState<string | null>(null);
+  const [configRetryToken, setConfigRetryToken] = useState(0);
 
   // Global Deep Vision rotation: which camera is allowed to analyze next
   const [currentAnalysisCameraId, setCurrentAnalysisCameraId] = useState<string | null>(null);
@@ -166,25 +168,36 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
   }, [onAlertResult, enabledCameras, cameraNames]);
 
   useEffect(() => {
+    let cancelled = false;
+    setConfigLoadError(null);
     fetch(`${YOLO_API_URL}/api/config`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`Backend returned ${res.status} — is the edge API running at ${YOLO_API_URL}?`);
+        }
+        return res.json();
+      })
       .then((data: AppConfig) => {
+        if (cancelled) return;
         console.log('[MultiCamera] Loaded configuration:', data.rtsp);
         setConfig(data);
-        // Show ALL cameras from config, not just enabled ones
         const allCameras = data.rtsp.cameras;
         setEnabledCameras(allCameras);
         console.log(`[MultiCamera] ${allCameras.length} camera(s) configured`);
-
-        // app.config.json is source-of-truth for runtime settings
         setFpsLimit(data.rtsp.fpsLimit);
         setGeminiInterval(data.rtsp.geminiInterval);
         setAutoStart(data.rtsp.autoStart);
       })
       .catch(err => {
         console.error('[MultiCamera] Failed to load configuration:', err);
+        if (!cancelled) {
+          setConfigLoadError(err instanceof Error ? err.message : String(err));
+        }
       });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [configRetryToken]);
 
   useEffect(() => {
     let mounted = true;
@@ -731,9 +744,38 @@ const MultiCameraGrid: React.FC<MultiCameraGridProps> = ({
   // Single return with conditional rendering — no early returns, so hooks always run in same order
   return (
     <>
-      {!config && (
+      {!config && !configLoadError && (
         <div style={{ padding: '2rem', textAlign: 'center', color: '#00d9ff' }}>
           ⏳ Loading camera configuration...
+        </div>
+      )}
+
+      {configLoadError && (
+        <div style={{
+          padding: '1.5rem',
+          margin: '1rem',
+          textAlign: 'center',
+          background: 'rgba(244, 67, 54, 0.12)',
+          border: '1px solid rgba(244, 67, 54, 0.45)',
+          borderRadius: '8px',
+          color: '#ffab91',
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Could not load camera configuration</div>
+          <div style={{ fontSize: '0.9rem', marginBottom: '1rem', opacity: 0.95 }}>{configLoadError}</div>
+          <button
+            type="button"
+            onClick={() => setConfigRetryToken(t => t + 1)}
+            style={{
+              padding: '0.5rem 1rem',
+              borderRadius: '6px',
+              border: '1px solid rgba(0, 217, 255, 0.5)',
+              background: 'rgba(0, 217, 255, 0.15)',
+              color: '#00d9ff',
+              cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
         </div>
       )}
 

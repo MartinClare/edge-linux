@@ -1,0 +1,16 @@
+# Allow the backend service user to manage Mullvad without password prompts.
+# Install with:
+#   sudo install -m 440 deploy/sudoers-edge-python-vpn /etc/sudoers.d/edge-python-vpn
+# Validate with:
+#   sudo visudo -cf /etc/sudoers.d/edge-python-vpn
+
+iris ALL=(root) NOPASSWD: /bin/systemctl start wg-mullvad
+iris ALL=(root) NOPASSWD: /bin/systemctl stop wg-mullvad
+iris ALL=(root) NOPASSWD: /bin/systemctl is-active wg-mullvad
+iris ALL=(root) NOPASSWD: /usr/bin/systemctl start wg-mullvad
+iris ALL=(root) NOPASSWD: /usr/bin/systemctl stop wg-mullvad
+iris ALL=(root) NOPASSWD: /usr/bin/systemctl is-active wg-mullvad
+iris ALL=(root) NOPASSWD: /usr/bin/systemctl start tailscaled
+iris ALL=(root) NOPASSWD: /usr/bin/systemctl stop tailscaled
+iris ALL=(root) NOPASSWD: /usr/bin/systemctl start edge-cloud
+iris ALL=(root) NOPASSWD: /usr/local/bin/wg-mullvad-policy.sh up

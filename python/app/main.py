@@ -133,7 +133,7 @@ def _capture_jpeg_from_rtsp(rtsp_url: str) -> Optional[bytes]:
 
 
 def _analyze_with_cloud(frame_jpeg: bytes) -> Optional[dict]:
-    # Gemini/OpenRouter traffic must use active Mullvad VPN path.
+    # Gemini/OpenRouter traffic can optionally use Mullvad VPN path.
     if not _ensure_vpn_ready_for_gemini():
         logger.warning("Skipping Gemini call: VPN is not ready")
         return None
@@ -158,7 +158,22 @@ def _analyze_with_cloud(frame_jpeg: bytes) -> Optional[dict]:
 
 
 def _ensure_vpn_ready_for_gemini() -> bool:
-    """Ensure wg-mullvad is active before sending Gemini/OpenRouter requests."""
+    """
+    Ensure VPN path is ready before Gemini calls when VPN is enabled.
+
+    Behavior:
+    - If app config has vpn.enabled=false, do not block cloud calls.
+    - If env GEMINI_REQUIRE_VPN is set to 0/false/no/off, do not block cloud calls.
+    - Otherwise keep the existing wg-mullvad readiness flow.
+    """
+    cfg = _load_runtime_config()
+    vpn_enabled = bool((cfg.get("vpn") or {}).get("enabled", True))
+    require_vpn_env = (os.getenv("GEMINI_REQUIRE_VPN", "") or "").strip().lower()
+    require_vpn = vpn_enabled and require_vpn_env not in {"0", "false", "no", "off"}
+
+    if not require_vpn:
+        return True
+
     try:
         state = subprocess.run(
             ["systemctl", "is-active", "wg-mullvad"],
@@ -169,17 +184,31 @@ def _ensure_vpn_ready_for_gemini() -> bool:
         )
         if (state.stdout or "").strip() == "active":
             # Refresh split routes (OpenRouter-only via mullvad).
-            subprocess.run(
-                ["sudo", "/usr/local/bin/wg-mullvad-policy.sh", "up"],
-                timeout=10,
-                capture_output=True,
-                check=False,
-            )
+            policy_script = "/usr/local/bin/wg-mullvad-policy.sh"
+            if Path(policy_script).exists():
+                subprocess.run(
+                    [policy_script, "up"],
+                    timeout=10,
+                    capture_output=True,
+                    check=False,
+                )
+                subprocess.run(
+                    ["sudo", "-n", policy_script, "up"],
+                    timeout=10,
+                    capture_output=True,
+                    check=False,
+                )
             return True
 
         # Auto-start VPN when Gemini path is used.
         subprocess.run(
-            ["sudo", "systemctl", "start", "wg-mullvad"],
+            ["systemctl", "start", "wg-mullvad"],
+            timeout=20,
+            capture_output=True,
+            check=False,
+        )
+        subprocess.run(
+            ["sudo", "-n", "systemctl", "start", "wg-mullvad"],
             timeout=20,
             capture_output=True,
             check=False,
@@ -193,12 +222,20 @@ def _ensure_vpn_ready_for_gemini() -> bool:
         )
         is_active = (verify.stdout or "").strip() == "active"
         if is_active:
-            subprocess.run(
-                ["sudo", "/usr/local/bin/wg-mullvad-policy.sh", "up"],
-                timeout=10,
-                capture_output=True,
-                check=False,
-            )
+            policy_script = "/usr/local/bin/wg-mullvad-policy.sh"
+            if Path(policy_script).exists():
+                subprocess.run(
+                    [policy_script, "up"],
+                    timeout=10,
+                    capture_output=True,
+                    check=False,
+                )
+                subprocess.run(
+                    ["sudo", "-n", policy_script, "up"],
+                    timeout=10,
+                    capture_output=True,
+                    check=False,
+                )
         return is_active
     except Exception as exc:
         logger.warning("Failed to ensure VPN before Gemini: %s", exc)
@@ -290,8 +327,10 @@ async def _deepvision_background_loop():
 # Load model at startup
 @app.on_event("startup")
 async def startup_event():
-    load_model()  # logs a warning and returns None on RK3576 (stub)
+    load_model()
     try:
+        # Start configured network services every backend startup.
+        _ensure_network_services_on_startup()
         central_server_cfg = {}
         # Load central server webhook settings from app.config.json for alarm observer forwarding.
         try:
@@ -335,7 +374,7 @@ async def root():
         "name": API_TITLE,
         "version": API_VERSION,
         "model": MODEL_PATH,
-        "device": "rk3576",
+        "device": get_actual_device(),
         "device_requested": DEVICE,
         "endpoints": {
             "image": "POST /detect/image",
@@ -979,14 +1018,14 @@ def _apply_vpn(enabled: bool) -> None:
     try:
         if enabled:
             subprocess.run(
-                ["sudo", "systemctl", "start", "wg-mullvad"],
+                ["sudo", "-n", "systemctl", "start", "wg-mullvad"],
                 timeout=30,
                 capture_output=True,
                 check=False,
             )
         else:
             subprocess.run(
-                ["sudo", "systemctl", "stop", "wg-mullvad"],
+                ["sudo", "-n", "systemctl", "stop", "wg-mullvad"],
                 timeout=15,
                 capture_output=True,
                 check=False,
@@ -1001,7 +1040,7 @@ def _ensure_edge_cloud_running() -> None:
     """Ensure edge-cloud.service is running (start if stopped)."""
     try:
         subprocess.run(
-            ["sudo", "systemctl", "start", "edge-cloud"],
+            ["sudo", "-n", "systemctl", "start", "edge-cloud"],
             timeout=15,
             capture_output=True,
             check=False,
@@ -1010,19 +1049,56 @@ def _ensure_edge_cloud_running() -> None:
         logger.warning("edge-cloud start failed: %s", e)
 
 
+def _ensure_service_started(unit: str) -> None:
+    """Best-effort start for a systemd unit (plain + sudo fallback)."""
+    try:
+        subprocess.run(
+            ["systemctl", "start", unit],
+            timeout=20,
+            capture_output=True,
+            check=False,
+        )
+        subprocess.run(
+            ["sudo", "-n", "systemctl", "start", unit],
+            timeout=20,
+            capture_output=True,
+            check=False,
+        )
+    except Exception as e:
+        logger.warning("service start failed (%s): %s", unit, e)
+
+
+def _ensure_network_services_on_startup() -> None:
+    """
+    Ensure configured network services are started every backend startup.
+
+    - VPN: start wg-mullvad when config says vpn.enabled=true
+    - Tailscale: start tailscaled when config says tailscale.enabled=true
+    """
+    cfg = _load_runtime_config()
+    vpn_enabled = bool((cfg.get("vpn") or {}).get("enabled", True))
+    tailscale_enabled = bool((cfg.get("tailscale") or {}).get("enabled", False))
+
+    if vpn_enabled:
+        _ensure_service_started("wg-mullvad")
+    if tailscale_enabled:
+        _ensure_service_started("tailscaled")
+
+
 def _apply_tailscale(enabled: bool, mode: str = "inbound") -> None:
     """Apply Tailscale on/off and operating mode in real time from PPE-UI."""
     try:
         if enabled:
             # Ensure daemon is running before bringing tunnel up.
             subprocess.run(
-                ["sudo", "systemctl", "start", "tailscaled"],
+                ["sudo", "-n", "systemctl", "start", "tailscaled"],
                 timeout=15,
                 capture_output=True,
                 check=False,
             )
             tailscale_up_cmd = [
                 "sudo",
+                "-n",
                 "tailscale",
                 "up",
                 "--accept-dns=false",
@@ -1038,14 +1114,14 @@ def _apply_tailscale(enabled: bool, mode: str = "inbound") -> None:
             )
         else:
             subprocess.run(
-                ["sudo", "tailscale", "down"],
+                ["sudo", "-n", "tailscale", "down"],
                 timeout=15,
                 capture_output=True,
                 check=False,
             )
             # Fully stop daemon so UI status reflects "off".
             subprocess.run(
-                ["sudo", "systemctl", "stop", "tailscaled"],
+                ["sudo", "-n", "systemctl", "stop", "tailscaled"],
                 timeout=15,
                 capture_output=True,
                 check=False,

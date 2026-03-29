@@ -1,0 +1,20 @@
+[Unit]
+Description=Edge Linux Cloud API (local workspace)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=iris
+Group=iris
+WorkingDirectory=/home/iris/Documents/development/edge-linux/cloud
+Environment=NODE_ENV=production
+Environment=PORT=3001
+Environment=NODE_OPTIONS=--no-network-family-autoselection
+EnvironmentFile=-/home/iris/Documents/development/edge-linux/cloud/.env
+ExecStart=/usr/bin/node /home/iris/Documents/development/edge-linux/cloud/dist/index.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

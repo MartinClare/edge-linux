@@ -14,39 +14,39 @@
     "cameras": [
       {
         "id": "camera1",
-        "name": "site_b_08",
-        "url": "rtsp://192.168.8.223:8554",
+        "name": "site_b_01",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_01",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
       },
       {
         "id": "camera2",
-        "name": "site_b_09",
-        "url": "rtsp://192.168.8.146:8554",
+        "name": "site_b_02",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_02",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
       },
       {
         "id": "camera3",
-        "name": "site_b_11",
-        "url": "rtsp://192.168.8.161:8554",
+        "name": "site_b_03",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_03",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
       },
       {
         "id": "camera4",
-        "name": "site_a_04",
-        "url": "rtsp://192.168.8.126:8554",
+        "name": "site_b_05",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_05",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
       }
     ],
     "fpsLimit": 15,
-    "geminiInterval": 5,
+    "geminiInterval": 300,
     "autoStart": true
   },
   "debug": {
@@ -54,12 +54,12 @@
     "showAllFeatures": false
   },
   "centralServer": {
-    "enabled": true,
+    "enabled": false,
     "url": "https://cctvcmp.vercel.app/api/webhook/edge-report",
     "apiKey": "axonedge852852"
   },
   "network": {
-    "camera_lan": "eth2",
+    "camera_lan": "eth1",
     "internet": "eth1",
     "vpn": "eth1",
     "cmp": "eth1"
@@ -68,7 +68,7 @@
     "enabled": true
   },
   "tailscale": {
-    "enabled": false,
-    "mode": "inbound"
+    "enabled": true,
+    "mode": "outbound"
   }
 }

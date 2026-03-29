@@ -1,0 +1,20 @@
+[Unit]
+Description=Edge AI Python Backend (local workspace)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=iris
+Group=iris
+WorkingDirectory=/home/iris/Documents/development/edge-linux/python
+Environment=PYTHONUNBUFFERED=1
+Environment=YOLO_DEVICE=cpu
+Environment=GEMINI_REQUIRE_VPN=true
+ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target

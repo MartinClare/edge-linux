@@ -3,6 +3,13 @@ import { analyzeImageGemini, analyzeImageAlerts } from '../services/geminiApi';
 import type { AnalysisMode, GeminiAnalysisResult, AlertAnalysisResult, GeminiDetection } from '../types/detection.types';
 import { YOLO_API_URL } from '../config/api';
 
+/** WebSocket must hit the FastAPI backend (same origin as YOLO), not the static UI host (e.g. :3000). */
+function yoloRtspStreamWebSocketUrl(): string {
+  const base = YOLO_API_URL.replace(/\/$/, '');
+  const wsBase = base.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
+  return `${wsBase}/ws/rtsp/stream`;
+}
+
 interface Detection {
   id: number;
   class_id: number;
@@ -95,6 +102,7 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
   const latestFrameIndexRef = useRef<number>(0);
   const mountIdRef = useRef<string>(Math.random().toString(36).substr(2, 9));
   const autoStartTriggeredRef = useRef<boolean>(false);
+  const [userStoppedStream, setUserStoppedStream] = useState(false);
   const handleConnectRef = useRef<() => void>(() => {});
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptsRef = useRef<number>(0);
@@ -173,6 +181,7 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
   }, [geminiInterval]);
 
   const handleConnect = () => {
+    setUserStoppedStream(false);
     if (!rtspUrl) {
       alert('Please enter an RTSP URL');
       return;
@@ -205,12 +214,12 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
     if (onGeminiResult) onGeminiResult(null);
     if (onAlertResult) onAlertResult(null);
 
-    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const ws = new WebSocket(`${wsProto}//${window.location.host}/ws/rtsp/stream`);
+    const ws = new WebSocket(yoloRtspStreamWebSocketUrl());
     
     ws.onopen = () => {
       console.log(`[RTSP-${cameraId}] WebSocket connected (${mountIdRef.current})`);
       reconnectAttemptsRef.current = 0;
+      setUserStoppedStream(false);
       ws.send(JSON.stringify({ rtsp_url: rtspUrl, fps_limit: fpsLimit }));
       setIsStreaming(true);
     };
@@ -380,6 +389,10 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
 
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
+      setStreamError(
+        `Cannot reach live stream at ${yoloRtspStreamWebSocketUrl()}. ` +
+          'Ensure the edge API (port 8000) is running and matches YOLO_API_URL.'
+      );
       setIsStreaming(false);
       scheduleReconnect('websocket error');
     };
@@ -400,6 +413,7 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
   const handleDisconnect = () => {
     console.log(`[RTSP-${cameraId}] Disconnecting stream (${mountIdRef.current}) and stopping OpenRouter requests`);
     manualDisconnectRef.current = true;
+    setUserStoppedStream(true);
     reconnectAttemptsRef.current = 0;
     if (reconnectTimerRef.current) {
       clearTimeout(reconnectTimerRef.current);
@@ -658,6 +672,11 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
     };
   }, [cameraId]);
 
+  // Keep RTSP URL in sync when parent passes a new URL (e.g. grid key / settings edit)
+  useEffect(() => {
+    if (propRtspUrl) setRtspUrl(propRtspUrl);
+  }, [propRtspUrl]);
+
   // Load configuration from app.config.json (only if props not provided)
   useEffect(() => {
     // If props are provided (multi-camera mode), skip config loading
@@ -708,11 +727,11 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
 
   return (
     <div className="rtsp-live-stream">
-      <h4>🔴 RTSP Live Stream with Real-Time Detection</h4>
+      {!compact && <h4>🔴 RTSP Live Stream with Real-Time Detection</h4>}
 
       {!isStreaming && (
         <>
-          {/* Display current configuration (read-only from config file) */}
+          {!compact && (
           <div style={{ 
             padding: '1rem', 
             background: 'rgba(255, 255, 255, 0.05)', 
@@ -735,6 +754,13 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
               💡 To change settings, edit <code>app.config.json</code>
             </small>
           </div>
+          )}
+
+          {compact && autoStart && !streamError && (
+            <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.65)', marginBottom: '0.5rem' }}>
+              Connecting live stream…
+            </div>
+          )}
 
           {streamError && (
             <div style={{
@@ -744,7 +770,7 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
               border: '1px solid rgba(244, 67, 54, 0.4)',
               borderRadius: '8px',
               color: '#ff8a80',
-              fontSize: '0.9rem',
+              fontSize: compact ? '0.8rem' : '0.9rem',
             }}>
               <strong>Stream error:</strong> {streamError}
               <div style={{ marginTop: '0.35rem', fontSize: '0.85rem', opacity: 0.9 }}>
@@ -753,6 +779,7 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
             </div>
           )}
 
+          {(!compact || !autoStart || streamError || userStoppedStream) && (
           <button
             className="connect-btn"
             onClick={handleConnect}
@@ -760,12 +787,13 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
           >
             {!config ? '⏳ Loading Configuration...' : '📡 Start Live Stream'}
           </button>
+          )}
         </>
       )}
 
       {isStreaming && (
         <>
-          <div className="stream-stats">
+          <div className="stream-stats" style={compact ? { fontSize: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' } : undefined}>
             <span>📊 Frame: {frameCount}</span>
             <span>⚡ FPS: {fps}</span>
             <span>🎯 Detections: {detections.length}</span>
@@ -774,7 +802,7 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
           <button
             className="disconnect-btn"
             onClick={handleDisconnect}
-            style={{ background: '#ff4444', marginBottom: '1rem' }}
+            style={{ background: '#ff4444', marginBottom: compact ? '0.5rem' : '1rem', fontSize: compact ? '0.8rem' : undefined, padding: compact ? '0.35rem 0.65rem' : undefined }}
           >
             ⏹ Stop Stream
           </button>

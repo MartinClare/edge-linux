@@ -1,0 +1,4 @@
+[Unit]
+Description=Edge Linux Full Stack (local workspace)
+Wants=edge-python-local.service edge-cloud-local.service edge-ui-local.service
+After=network-online.target
