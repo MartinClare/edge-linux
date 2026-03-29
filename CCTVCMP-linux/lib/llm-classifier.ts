@@ -69,48 +69,37 @@ type AnalysisPayload = {
 
 const INCIDENT_TYPES: IncidentType[] = [
   "ppe_violation",
-  "fall_risk",
-  "restricted_zone_entry",
   "machinery_hazard",
-  "near_miss",
   "smoking",
   "fire_detected",
-  "smoke_detected",
 ];
 
-const CLASSIFICATION_PROMPT = `You are a construction-site safety incident classifier working for a Central Monitoring Platform (CMP).
+const CLASSIFICATION_PROMPT = `You are a construction-site incident verifier working for a Central Monitoring Platform (CMP).
 
-The edge device (camera AI) has already analysed the scene and produced a structured report. Your role is to INDEPENDENTLY re-evaluate that report and classify it into incident types with your own risk assessment.
+The edge device has already analysed the scene and produced a text report. Your job is NOT to invent new issue types. Your job is only to read the edge text and decide whether the edge explicitly mentioned any of these 4 issue types:
+- ppe_violation
+- smoking
+- fire_detected
+- machinery_hazard
 
-Reasoning approach (think step-by-step before producing your JSON):
-1. Read all issues across construction safety, fire safety, and property security.
-2. Note PPE counts: people present, missing hardhats, missing vests, detection labels.
-3. For each of the 8 incident types, evaluate whether it applies to the evidence.
-4. Assign risk levels based on severity visible in the evidence — NOT on the edge's overall risk.
-5. Be precise: do NOT mark fire_detected unless active flame/fire is explicitly mentioned.
+Strict rules:
+1. NEVER raise a new issue type that the edge text does not mention.
+2. Ignore vague terms like "near miss", "general hazard", "unsafe condition", or "people count".
+3. Do NOT classify fall_risk, near_miss, restricted_zone_entry, or smoke_detected.
+4. Do NOT use peopleCount to decide severity; it is not reliable enough.
+5. For PPE, only detect ppe_violation when the edge explicitly describes missing PPE or PPE-violation detections.
+6. For fire_detected, require the edge to mention active fire/flame/burning — not only smoke.
 
-CRITICAL: Do NOT copy the edge device's overall risk level. Each type gets its own independent assessment.
+Risk rules:
+- ppe_violation    → "high" when edge clearly reports missing PPE
+- smoking          → "high" when edge clearly reports a person smoking
+- fire_detected    → "critical" when edge clearly reports active fire/flame
+- machinery_hazard → "high" when edge clearly reports machinery too close to people
 
-Risk level rules per incident type:
-- fire_detected    → "critical" if active flame present; "high" if fire is strongly suspected
-- smoke_detected   → "high" by default; "critical" if combined with active fire evidence
-- machinery_hazard → "high" if worker in immediate danger; "medium" if proximity concern only
-- fall_risk        → "critical" if person fallen/at unguarded edge; "high" if working at height
-- ppe_violation    → count persons missing hardhat OR vest: 1="medium", 2="high", 3+="critical"
-- restricted_zone_entry → "medium" near boundary; "high" confirmed inside; "critical" near live hazard
-- smoking          → "medium" always
-- near_miss        → "medium" by default; "high" if machinery or height involved
-
-Classification rules:
-- fire_detected ONLY if active flame/fire is explicitly mentioned in the evidence
-- smoke_detected ONLY if visible smoke is explicitly mentioned
-- "no issues" / "all clear" / empty lists → not detected (confidence ≥ 0.9)
-- Output ALL 8 incident types; set detected:false for those not observed
-
-Return STRICT JSON only — no markdown, no explanation outside the JSON object:
+Return STRICT JSON only:
 {
   "classifications": [
-    { "type": "<incident_type>", "detected": true/false, "riskLevel": "low|medium|high|critical", "confidence": 0.0-1.0, "reasoning": "one line citing the specific evidence" }
+    { "type": "<one of the 4 incident types>", "detected": true/false, "riskLevel": "low|high|critical", "confidence": 0.0-1.0, "reasoning": "one line citing the edge text evidence" }
   ]
 }`;
 
@@ -182,7 +171,6 @@ function extractCompactPayload(analysis: AnalysisPayload) {
   // independently rather than echoing the edge device's single-number assessment.
   const base = {
     overallDescription: analysis.overallDescription,
-    peopleCount: analysis.peopleCount ?? 0,
     missingHardhats: analysis.missingHardhats ?? 0,
     missingVests: analysis.missingVests ?? 0,
     constructionIssues: analysis.constructionSafety.issues ?? [],
@@ -207,7 +195,7 @@ function shouldSkipLLM(analysis: AnalysisPayload): boolean {
   const ppeClean = (analysis.missingHardhats ?? 0) === 0 && (analysis.missingVests ?? 0) === 0;
   // Hazard detections from Gemini mean the LLM can still classify fire/smoke/machinery
   const hasHazardDetections = analysis.detections?.some((d) =>
-    ["fire_smoke", "smoking", "machine_proximity", "working_at_height", "person_fallen", "safety_hazard"].includes(d.label)
+    ["fire_smoke", "smoking", "machine_proximity", "no_hardhat", "no_vest", "no_hardhat_no_vest"].includes(d.label)
   ) ?? false;
   return noIssueText && ppeClean && !hasHazardDetections;
 }
@@ -215,14 +203,10 @@ function shouldSkipLLM(analysis: AnalysisPayload): boolean {
 /**
  * CMP's own PPE risk assessment — independent of the edge's overallRiskLevel.
  *
- * Risk scale (CMP policy, overrides edge claim):
- *   0 violations              → not detected / low
- *   1 person missing PPE      → medium
- *   2 persons missing PPE     → high
- *   3+ persons missing PPE    → critical
- *
- * Detection labels (no_hardhat, no_vest, no_hardhat_no_vest) from Gemini bounding
- * boxes act as a corroboration signal when numeric counts are absent or zero.
+ * CMP no longer estimates the number of people involved; edge people counts are
+ * not reliable enough. PPE is treated as a focused issue type: if the edge text
+ * or detections indicate missing PPE, CMP marks ppe_violation=true and lets the
+ * alarm rules / UI handle severity policy.
  */
 function classifyPPE(analysis: AnalysisPayload): Classification {
   const missingHats = analysis.missingHardhats ?? 0;
@@ -234,9 +218,7 @@ function classifyPPE(analysis: AnalysisPayload): Classification {
     ppeLabels.includes(d.label as typeof ppeLabels[number])
   ) ?? [];
 
-  // Prefer numeric count; fall back to detection count
-  const violationCount = missingNumeric > 0 ? missingNumeric : ppeDetections.length;
-  const detected = violationCount > 0;
+  const detected = missingNumeric > 0 || ppeDetections.length > 0;
 
   if (!detected) {
     return {
@@ -248,19 +230,9 @@ function classifyPPE(analysis: AnalysisPayload): Classification {
     };
   }
 
-  // CMP independently derives risk from the count — ignores edge overallRiskLevel
-  let riskLevel: IncidentRiskLevel;
-  if (violationCount >= 3) {
-    riskLevel = "critical";
-  } else if (violationCount === 2) {
-    riskLevel = "high";
-  } else {
-    riskLevel = "medium";
-  }
-
   const parts: string[] = [];
   if (missingNumeric > 0) {
-    parts.push(`${missingHats} missing hardhats, ${missingVests} missing vests of ${analysis.peopleCount ?? "?"} people`);
+    parts.push(`${missingHats} missing hardhats, ${missingVests} missing vests reported by edge`);
   }
   if (ppeDetections.length > 0) {
     parts.push(`${ppeDetections.length} bounding-box PPE violation(s): ${ppeDetections.map((d) => d.label).join(", ")}`);
@@ -269,9 +241,9 @@ function classifyPPE(analysis: AnalysisPayload): Classification {
   return {
     type: "ppe_violation",
     detected: true,
-    riskLevel,
+    riskLevel: "high",
     confidence: missingNumeric > 0 ? 1.0 : 0.85,
-    reasoning: `CMP assessment: ${riskLevel} (${violationCount} violation(s)). ${parts.join("; ")}`,
+    reasoning: `CMP verification: edge reported PPE violation. ${parts.join("; ")}`,
   };
 }
 
@@ -353,11 +325,8 @@ async function classifyWithLLM(analysis: AnalysisPayload): Promise<Classificatio
 
 // ---- Keyword fallback (improved) ----
 
-const FALL_KEYWORDS = ["fall", "height", "scaffold", "ladder", "tripping", "slip", "guardrail", "harness"];
 const FIRE_KEYWORDS = ["active fire", "flame", "burning", "blaze", "on fire", "engulfed"];
-const SMOKE_KEYWORDS = ["visible smoke", "smoldering", "smoking area"];
-const INTRUSION_KEYWORDS = ["intrusion", "unauthorized", "restricted", "trespass", "breached"];
-const MACHINERY_KEYWORDS = ["machinery", "heavy equipment", "crane", "forklift", "excavator"];
+const MACHINERY_KEYWORDS = ["machine", "machinery", "heavy equipment", "crane", "forklift", "excavator", "too close"];
 const SMOKING_KEYWORDS = ["smoking", "cigarette", "tobacco"];
 
 function issuesContain(issues: string[], keywords: string[]): boolean {
@@ -376,9 +345,6 @@ const DETECTION_LABEL_TO_INCIDENT: Partial<Record<DetectionLabel, IncidentType>>
   fire_smoke:        "fire_detected",
   smoking:           "smoking",
   machine_proximity: "machinery_hazard",
-  working_at_height: "fall_risk",
-  person_fallen:     "fall_risk",
-  safety_hazard:     "near_miss",
 };
 
 /**
@@ -388,20 +354,14 @@ const DETECTION_LABEL_TO_INCIDENT: Partial<Record<DetectionLabel, IncidentType>>
  */
 const INHERENT_RISK: Record<IncidentType, IncidentRiskLevel> = {
   fire_detected:        "critical",
-  smoke_detected:       "high",
-  person_fallen:        "critical",
-  working_at_height:    "high",
-  fall_risk:            "high",
   machinery_hazard:     "high",
-  ppe_violation:        "medium",   // PPE is handled separately by classifyPPE
-  restricted_zone_entry:"medium",
-  smoking:              "medium",
-  near_miss:            "medium",
+  ppe_violation:        "high",
+  smoking:              "high",
 } as unknown as Record<IncidentType, IncidentRiskLevel>;
 
 /** Escalate risk for detection labels that imply a more severe case. */
 function escalateByDetection(base: IncidentRiskLevel, type: IncidentType, detections: Detection[]): IncidentRiskLevel {
-  if (type === "fall_risk" && detections.some((d) => d.label === "person_fallen")) return "critical";
+  if (type === "fire_detected" && detections.some((d) => d.label === "fire_smoke")) return "critical";
   return base;
 }
 
@@ -422,13 +382,9 @@ function fallbackClassify(analysis: AnalysisPayload): Classification[] {
     issues: string[];
     summary: string;
   }> = [
-    { type: "fall_risk",             keywords: FALL_KEYWORDS,      issues: analysis.constructionSafety.issues, summary: analysis.constructionSafety.summary },
     { type: "fire_detected",         keywords: FIRE_KEYWORDS,      issues: analysis.fireSafety.issues,         summary: analysis.fireSafety.summary },
-    { type: "smoke_detected",        keywords: SMOKE_KEYWORDS,     issues: analysis.fireSafety.issues,         summary: analysis.fireSafety.summary },
-    { type: "restricted_zone_entry", keywords: INTRUSION_KEYWORDS, issues: analysis.propertySecurity.issues,   summary: analysis.propertySecurity.summary },
     { type: "machinery_hazard",      keywords: MACHINERY_KEYWORDS, issues: analysis.constructionSafety.issues, summary: analysis.constructionSafety.summary },
     { type: "smoking",               keywords: SMOKING_KEYWORDS,   issues: [...analysis.fireSafety.issues, ...analysis.propertySecurity.issues], summary: "" },
-    { type: "near_miss",             keywords: [],                 issues: [],                                 summary: "" },
   ];
 
   for (const cat of categories) {

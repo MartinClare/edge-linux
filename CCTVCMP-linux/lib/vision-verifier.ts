@@ -6,7 +6,7 @@
  * verify whether the description is accurate.  The result is then reconciled
  * with the text-classifier output so that:
  *
- *  • Missed hazards detected by vision are added (with lower confidence).
+ *  • CMP never introduces new issue types from vision alone.
  *  • Hazards claimed in text but absent from the image have their confidence
  *    reduced.
  *  • The final `ClassificationResult` carries a `visionVerified` flag and a
@@ -58,43 +58,35 @@ export type VisionVerificationResult = {
 
 const INCIDENT_TYPES: IncidentType[] = [
   "ppe_violation",
-  "fall_risk",
-  "restricted_zone_entry",
   "machinery_hazard",
-  "near_miss",
   "smoking",
   "fire_detected",
-  "smoke_detected",
 ];
 
 const VISION_SYSTEM_PROMPT = `You are an expert construction-site safety auditor with deep expertise in PPE compliance, fire hazards, and machinery safety. You are reviewing a camera image.
 
-An edge AI device has already produced a text description of this scene. Your task is to act as an INDEPENDENT second opinion — look at the image yourself and verify whether the edge's description is accurate.
+An edge AI device has already produced a text description of this scene. Your task is to verify whether the edge's description is visually supported.
 
 Step-by-step approach (reason carefully before answering):
-1. Scan the image systematically: identify every person, every piece of machinery, visible flames/smoke, and environmental hazards.
-2. For each person: check hardhat, high-visibility vest, and proximity to machinery/edges.
-3. Compare what you actually see to the edge device's description.
-4. Note anything the edge missed or incorrectly claimed.
-5. Assign risk levels based solely on visual evidence — NOT on what the edge said.
+1. Read the edge summary first.
+2. Only evaluate these 4 issue types: ppe_violation, smoking, fire_detected, machinery_hazard.
+3. Compare the image to the edge summary and decide whether each edge-mentioned issue is visually supported.
+4. NEVER introduce a new issue type that the edge did not mention.
+5. Do NOT use people counts; they are not reliable enough for this task.
 
-Risk rules (your independent assessment):
-- fire_detected → "critical" if active flame visible, "high" if fire strongly suspected
-- smoke_detected → "high"; "critical" if combined with visible fire
-- fall_risk → "critical" if person has fallen or is at unguarded edge, "high" if working at height
-- machinery_hazard → "high" if worker within arm's reach of operating machinery, "medium" if nearby
-- ppe_violation → count persons missing hardhat OR vest: 1="medium", 2="high", 3+="critical"
-- restricted_zone_entry → "medium" if near boundary, "high" if confirmed inside, "critical" near live danger
-- smoking → "medium" always
-- near_miss → "medium"; "high" if machinery or height involved
+Risk rules:
+- ppe_violation    → "high" when visually supported
+- smoking          → "high" when visually supported
+- fire_detected    → "critical" when active fire/flame is visible
+- machinery_hazard → "high" when machinery is too close to a person
 
 Return STRICT JSON only — no markdown fences, no commentary outside the JSON:
 {
   "descriptionAccuracy": "accurate|partially_accurate|inaccurate",
-  "missedHazards": ["describe each hazard the edge did not mention"],
+  "missedHazards": [],
   "incorrectClaims": ["describe each edge claim NOT visible in the image"],
   "visionClassifications": [
-    { "type": "<one of the 8 types>", "detected": true/false, "riskLevel": "low|medium|high|critical", "confidence": 0.0-1.0, "reasoning": "one concise line citing visual evidence" }
+    { "type": "<one of the 4 types>", "detected": true/false, "riskLevel": "low|high|critical", "confidence": 0.0-1.0, "reasoning": "one concise line citing visual evidence" }
   ],
   "summary": "one sentence overall verdict"
 }`;
@@ -137,7 +129,7 @@ function buildEdgeSummaryText(analysis: {
 }): string {
   const lines: string[] = [
     `Overall: ${analysis.overallDescription}`,
-    `People: ${analysis.peopleCount ?? "unknown"}, missing hardhats: ${analysis.missingHardhats ?? 0}, missing vests: ${analysis.missingVests ?? 0}`,
+    `PPE flags from edge: missing hardhats: ${analysis.missingHardhats ?? 0}, missing vests: ${analysis.missingVests ?? 0}`,
     `Construction safety: ${analysis.constructionSafety.summary}`,
     ...(analysis.constructionSafety.issues.length ? [`  Issues: ${analysis.constructionSafety.issues.join("; ")}`] : []),
     `Fire safety: ${analysis.fireSafety.summary}`,
@@ -252,7 +244,7 @@ function higher(a: IncidentRiskLevel, b: IncidentRiskLevel): IncidentRiskLevel {
  *
  * Strategy per incident type:
  *  - Both detected  → keep higher risk, average confidence, append reasoning.
- *  - Vision only    → include but mark confidence as 0.75 (visual evidence only).
+ *  - Vision only    → ignored (CMP must not invent a new issue not mentioned by edge).
  *  - Text only      → keep but reduce confidence by 20% (vision didn't corroborate).
  *  - Neither        → not detected.
  */
@@ -283,13 +275,13 @@ export function reconcileClassifications(
         reasoning: `Text+Vision agree. Text: ${t.reasoning} | Vision: ${v.reasoning}`,
       });
     } else if (!t?.detected && v?.detected) {
-      // Vision found something text missed
+      // Ignore vision-only issues — CMP must not raise new issue types the edge did not mention
       reconciled.push({
         type,
-        detected: true,
-        riskLevel: v.riskLevel,
+        detected: false,
+        riskLevel: "low",
         confidence: Math.min(0.75, v.confidence),
-        reasoning: `Vision only (text missed): ${v.reasoning}`,
+        reasoning: `Ignored vision-only issue (edge did not mention it): ${v.reasoning}`,
       });
     } else if (t?.detected && !v?.detected) {
       // Text claims detection but vision disagrees — reduce confidence
