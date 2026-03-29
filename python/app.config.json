@@ -56,7 +56,8 @@
   "centralServer": {
     "enabled": true,
     "url": "https://cctvcmpchev-git-main-martinclares-projects.vercel.app/api/webhook/edge-report",
-    "apiKey": "axonedge852852"
+    "apiKey": "axonedge852852",
+    "vercelBypassToken": ""
   },
   "network": {
     "camera_lan": "eth1",

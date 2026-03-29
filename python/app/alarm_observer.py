@@ -585,11 +585,19 @@ class AlarmObserver:
         def _do_send() -> None:
             jwt_secret = _load_jwt_secret()
             auth_token = _generate_jwt(jwt_secret) if jwt_secret else ""
+            bypass_token = cfg.get("vercelBypassToken", "").strip()
             for attempt in range(retry_attempts):
                 try:
                     base_headers = {"X-API-Key": api_key}
                     if auth_token:
                         base_headers["Authorization"] = f"Bearer {auth_token}"
+                    # Vercel Deployment Protection bypass — required when the CMP is
+                    # deployed on Vercel with Deployment Protection enabled.
+                    # Set centralServer.vercelBypassToken in app.config.json (value from
+                    # Vercel project → Settings → Deployment Protection →
+                    # "Protection Bypass for Automation").
+                    if bypass_token:
+                        base_headers["x-vercel-protection-bypass"] = bypass_token
 
                     if image_jpeg:
                         # multipart: 'payload' field carries JSON; 'image' field carries JPEG bytes
@@ -724,12 +732,17 @@ class AlarmObserver:
         url = cfg.get("url", "").rstrip("/")
         api_key = cfg.get("apiKey", "")
 
+        bypass_token = cfg.get("vercelBypassToken", "").strip()
+
         def _do_keepalive() -> None:
             try:
+                headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+                if bypass_token:
+                    headers["x-vercel-protection-bypass"] = bypass_token
                 resp = requests.post(
                     url,
                     json=payload,
-                    headers={"X-API-Key": api_key, "Content-Type": "application/json"},
+                    headers=headers,
                     timeout=15,
                 )
                 if resp.ok:
