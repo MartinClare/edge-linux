@@ -46,7 +46,7 @@
       }
     ],
     "fpsLimit": 15,
-    "geminiInterval": 5,
+    "geminiInterval": 600,
     "autoStart": true
   },
   "debug": {
@@ -56,8 +56,7 @@
   "centralServer": {
     "enabled": true,
     "url": "https://cctvcmpchev-git-main-martinclares-projects.vercel.app/api/webhook/edge-report",
-    "apiKey": "axonedge852852",
-    "vercelBypassToken": "DgDk0ncqfYOMOcldWHi1McwSWSiaqTpX"
+    "apiKey": "axonedge852852"
   },
   "network": {
     "camera_lan": "eth1",

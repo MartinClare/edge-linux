@@ -10,6 +10,7 @@ import { ArrowLeft } from "lucide-react";
 import { EdgeDeviceActions } from "@/components/edge-devices/edge-device-actions";
 import { StreamUrlForm } from "@/components/edge-devices/stream-url-form";
 import { EdgeDeviceReportFeed } from "@/components/edge-devices/edge-device-report-feed";
+import { CameraSnapshot } from "@/components/edge-devices/camera-snapshot";
 
 const ONLINE_THRESHOLD_MS = 5 * 60 * 1000;
 
@@ -59,11 +60,6 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
     now - camera.lastReportAt.getTime() < ONLINE_THRESHOLD_MS;
 
   const latestAnalysis = reports.find((r) => !r.keepalive && r.messageType !== "keepalive");
-
-  // Check if any stored JPEG exists (served via /api/edge-devices/[id]/snapshot)
-  const hasStoredImage = await prisma.edgeReport.count({
-    where: { cameraId: camera.id, eventImageData: { not: null } },
-  }) > 0;
 
   const snapshotUrl = `/api/edge-devices/${camera.id}/snapshot`;
 
@@ -177,22 +173,9 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
             <CardTitle className="text-sm">Latest Snapshot</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {hasStoredImage ? (
-              <a href={snapshotUrl} target="_blank" rel="noreferrer">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={snapshotUrl}
-                  alt="Latest camera snapshot"
-                  className="w-full max-h-40 rounded border object-cover hover:opacity-90 transition-opacity bg-muted"
-                />
-              </a>
-            ) : (
-              <div className="w-full h-28 rounded border bg-muted flex flex-col items-center justify-center gap-1 text-muted-foreground">
-                <span className="text-2xl">📷</span>
-                <span className="text-xs">No snapshot yet</span>
-                <span className="text-xs opacity-60">Arrives with first analysis report</span>
-              </div>
-            )}
+            {/* CameraSnapshot auto-refreshes every 30 s and always shows the last
+                known good frame — never flashes to a placeholder during reload */}
+            <CameraSnapshot snapshotUrl={snapshotUrl} />
             <StreamUrlForm deviceId={camera.id} initialStreamUrl={camera.streamUrl} />
           </CardContent>
         </Card>

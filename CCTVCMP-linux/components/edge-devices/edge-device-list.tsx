@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatHKT } from "@/lib/utils";
@@ -33,19 +33,57 @@ type Device = {
   reportCount: number;
 };
 
-/** Loads the latest stored camera snapshot from the DB image API.
- *  Falls back to a camera icon placeholder if no image is stored yet. */
+const SNAPSHOT_REFRESH_MS = 30_000; // refresh every 30 s on the list page
+
+/**
+ * Snapshot thumbnail with graceful caching:
+ *  - A hidden <img> preloads the latest frame in the background.
+ *  - The visible image only swaps when the new frame is fully loaded.
+ *  - On error (or 204 = no image yet) the old image (or placeholder) stays visible.
+ *  - Auto-refreshes every 30 s so cards stay current without a page reload.
+ */
 function DeviceSnapshot({ deviceId, name }: { deviceId: string; name: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return <SnapshotPlaceholder />;
+  const base = `/api/edge-devices/${deviceId}/snapshot`;
+
+  // pendingSrc: what we're currently trying to load (bumped every 30 s)
+  const [pendingSrc, setPendingSrc] = useState(base);
+  // displaySrc: last successfully loaded image — never cleared on error
+  const [displaySrc, setDisplaySrc] = useState<string | null>(null);
+
+  // Bump pendingSrc periodically so the hidden img re-fetches
+  useEffect(() => {
+    const id = setInterval(
+      () => setPendingSrc(`${base}?t=${Date.now()}`),
+      SNAPSHOT_REFRESH_MS
+    );
+    return () => clearInterval(id);
+  }, [base]);
+
   return (
-    /* eslint-disable-next-line @next/next/no-img-element */
-    <img
-      src={`/api/edge-devices/${deviceId}/snapshot`}
-      alt={`${name} snapshot`}
-      className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-      onError={() => setFailed(true)}
-    />
+    <>
+      {/* Hidden preloader — fetches new frame; swaps display only on success */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        key={pendingSrc}
+        src={pendingSrc}
+        alt=""
+        aria-hidden
+        className="hidden"
+        onLoad={() => setDisplaySrc(pendingSrc)}
+        // On error: do nothing — displaySrc (old image or null) stays unchanged
+      />
+
+      {displaySrc ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={displaySrc}
+          alt={`${name} snapshot`}
+          className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+        />
+      ) : (
+        <SnapshotPlaceholder />
+      )}
+    </>
   );
 }
 

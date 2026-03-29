@@ -44,13 +44,25 @@ export async function GET(
   }
 
   const mimeType = report.eventImageMimeType ?? "image/jpeg";
-  return new NextResponse(report.eventImageData, {
+  const data = report.eventImageData;
+
+  // ETag: lightweight hash of the first 64 bytes of the image so the browser can
+  // use If-None-Match for efficient polling (304 Not Modified = no body transfer).
+  const etag = `"${Buffer.from(data.slice(0, 64)).toString("base64").replace(/[+/=]/g, "").slice(0, 24)}"`;
+
+  if (request.headers.get("if-none-match") === etag) {
+    return new NextResponse(null, { status: 304 });
+  }
+
+  return new NextResponse(data, {
     status: 200,
     headers: {
       "Content-Type": mimeType,
-      // Cache for 30 s so repeated page loads don't hit the DB repeatedly,
-      // but the thumbnail refreshes naturally on next page load.
-      "Cache-Control": "public, max-age=30, stale-while-revalidate=60",
+      "ETag": etag,
+      // Browser may serve the cached copy immediately (max-age=30) and then
+      // revalidate in the background (stale-while-revalidate=300).
+      // This means the old image is always shown instantly while the new one loads.
+      "Cache-Control": "public, max-age=30, stale-while-revalidate=300",
     },
   });
 }
