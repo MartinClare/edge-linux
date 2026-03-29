@@ -586,7 +586,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   CMP Webhook URL
                 </label>
                 <small style={{ display: 'block', marginBottom: '0.35rem', color: 'rgba(255,255,255,0.55)', fontSize: '0.75rem' }}>
-                  Path must be <code style={{ color: '#00d9ff' }}>/api/webhook/edge-report</code>. Local CCTVCMP in this repo (port 3002):{' '}
+                  Path must be <code style={{ color: '#00d9ff' }}>/api/webhook/edge-report</code>. Local CMP copy in this repo, <code style={{ color: '#00d9ff' }}>CCTVCMP-linux</code> (port 3002):{' '}
                   <code style={{ color: '#00d9ff' }}>http://localhost:3002/api/webhook/edge-report</code>
                   {' · '}Production: <code style={{ color: '#00d9ff' }}>https://cctvcmp.vercel.app/api/webhook/edge-report</code>
                 </small>

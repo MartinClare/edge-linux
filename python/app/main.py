@@ -339,8 +339,8 @@ async def startup_event():
         _ensure_network_services_on_startup()
         central_server_cfg = {}
         # CMP webhook: centralServer.{enabled,url,apiKey} → posts JSON built by app/cmp_webhook.py
-        # (aligned with CCTVCMP/lib/validations/webhook.ts + CCTVCMP/app/api/webhook/edge-report/route.ts).
-        # Local CMP from this repo: npm run dev in CCTVCMP → http://localhost:3002/api/webhook/edge-report
+        # (aligned with CCTVCMP-linux/lib/validations/webhook.ts + CCTVCMP-linux/app/api/webhook/edge-report/route.ts).
+        # Local CMP from this repo: npm run dev in CCTVCMP-linux → http://localhost:3002/api/webhook/edge-report
         try:
             cfg_path = _root_app_config_path()
             if cfg_path.exists():

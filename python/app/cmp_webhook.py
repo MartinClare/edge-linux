@@ -1,18 +1,18 @@
 """
 Central Monitoring Platform (CMP) — inbound webhook payload for POST /api/webhook/edge-report.
 
-Keep this module aligned with the Zod schema in the bundled CMP app:
-  CCTVCMP/lib/validations/webhook.ts  →  edgeReportSchema, analysisSchema, normalizeEdgeWebhookPayload
+Keep this module aligned with the Zod schema in the bundled CMP app (standalone Linux copy in this repo):
+  CCTVCMP-linux/lib/validations/webhook.ts  →  edgeReportSchema, analysisSchema, normalizeEdgeWebhookPayload
 
 Server handler (auth + multipart rules):
-  CCTVCMP/app/api/webhook/edge-report/route.ts
+  CCTVCMP-linux/app/api/webhook/edge-report/route.ts
 
 Edge sends JSON only (no multipart image):
   - Headers: Content-Type: application/json, X-API-Key: <centralServer.apiKey from app.config.json>
   - Body top-level: edgeCameraId, cameraName, timestamp, analysis
   - Optional CMP fields we omit (defaults apply): messageType=analysis, keepalive=false, eventImageIncluded=false
 
-Human-readable reference: CCTVCMP/WEBHOOK_API.md
+Human-readable reference: CCTVCMP-linux/WEBHOOK_API.md
 """
 
 from __future__ import annotations
