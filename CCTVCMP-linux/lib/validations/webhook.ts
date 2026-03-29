@@ -31,6 +31,30 @@ function coerceSafetyCategory(input: unknown): { summary: string; issues: string
   return { summary, issues, recommendations };
 }
 
+/**
+ * One Gemini bounding-box detection (per-person or per-hazard).
+ * bbox = [y_min, x_min, y_max, x_max] normalised 0–1000.
+ * CMP stores the array and can use it for drawing overlays or severity decisions.
+ */
+const detectionSchema = z.object({
+  label: z.enum([
+    "person_ok",
+    "no_hardhat",
+    "no_vest",
+    "no_hardhat_no_vest",
+    "fire_smoke",
+    "smoking",
+    "machine_proximity",
+    "working_at_height",
+    "person_fallen",
+    "safety_hazard",
+  ]),
+  bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+  description: z.string().optional(),
+});
+
+export type EdgeDetection = z.infer<typeof detectionSchema>;
+
 const analysisSchema = z
   .object({
     overallDescription: z.union([z.string(), z.null()]).optional(),
@@ -41,6 +65,9 @@ const analysisSchema = z
     peopleCount: z.number().nullish(),
     missingHardhats: z.number().nullish(),
     missingVests: z.number().nullish(),
+    /** Per-person / per-hazard bounding-box detections from Gemini. CMP uses these
+     *  to make its own display and severity decisions rather than trusting the edge. */
+    detections: z.array(z.unknown()).optional(),
   })
   .transform((a) => ({
     overallDescription: a.overallDescription ?? "",
@@ -51,6 +78,10 @@ const analysisSchema = z
     peopleCount: a.peopleCount ?? null,
     missingHardhats: a.missingHardhats ?? null,
     missingVests: a.missingVests ?? null,
+    detections: (a.detections ?? [])
+      .map((d) => detectionSchema.safeParse(d))
+      .filter((r): r is { success: true; data: EdgeDetection } => r.success)
+      .map((r) => r.data),
   }));
 
 function truthyFlag(v: unknown): boolean {

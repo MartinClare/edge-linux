@@ -63,6 +63,7 @@ app.add_middleware(CORSHeaderMiddleware)
 app.include_router(alarm_router)
 
 _deepvision_task: Optional[asyncio.Task] = None
+_heartbeat_task: Optional[asyncio.Task] = None
 _deepvision_camera_index: int = 0
 _latest_deepvision_results: dict[str, dict] = {}
 _DEEPVISION_CACHE_FILE = Path(__file__).resolve().parent.parent / "deepvision_cache.json"
@@ -245,9 +246,12 @@ def _ensure_vpn_ready_for_gemini() -> bool:
 
 def _build_alarm_payload(camera_id: str, camera_name: str, result: dict) -> dict:
     """
-    Keep backend CMP payload 1:1 with previous PPE-UI forwarding shape.
+    Build the payload forwarded to CMP and the local alarm observer.
+    Passes ALL fields returned by Gemini so CMP has the full picture and can
+    make its own display / severity decisions.  The `detections` array contains
+    per-person bounding-box labels (no_hardhat, no_vest, fire_smoke, etc.).
     """
-    return {
+    payload: dict = {
         "camera_id": camera_id,
         "camera_name": camera_name,
         "overallDescription": result.get("overallDescription"),
@@ -259,6 +263,47 @@ def _build_alarm_payload(camera_id: str, camera_name: str, result: dict) -> dict
         "fireSafety": result.get("fireSafety") or {},
         "propertySecurity": result.get("propertySecurity") or {},
     }
+    # Include Gemini bounding-box detections when present so CMP can draw overlays
+    # or use them in its own classification logic.
+    if result.get("detections") is not None:
+        payload["detections"] = result["detections"]
+    return payload
+
+
+async def _heartbeat_loop():
+    """Send a keepalive ping to CMP for every enabled camera every 60 seconds.
+
+    This keeps each camera 'online' in the CMP Edge Devices list even during quiet
+    periods (no new analysis), and acts as a liveness signal if Deep Vision is slow
+    or paused.  The interval is capped to 60 s so it always falls inside CMP's
+    5-minute online threshold.
+    """
+    HEARTBEAT_INTERVAL = 60  # seconds — must be < CMP's 5-minute online threshold
+    logger.info("Heartbeat loop started (60 s interval → CMP keepalive)")
+    while True:
+        try:
+            cfg = _load_runtime_config()
+            if isinstance(cfg.get("centralServer"), dict):
+                get_alarm_observer().set_central_server_config(cfg["centralServer"])
+
+            rtsp_cfg = cfg.get("rtsp", {}) if isinstance(cfg, dict) else {}
+            cameras = rtsp_cfg.get("cameras", [])
+            enabled_cameras = [c for c in cameras if isinstance(c, dict) and c.get("enabled") and c.get("url")]
+
+            if enabled_cameras:
+                observer = get_alarm_observer()
+                for cam in enabled_cameras:
+                    camera_id = cam.get("id", cam.get("name", "unknown"))
+                    camera_name = cam.get("name", camera_id)
+                    observer.send_keepalive(camera_id, camera_name)
+
+        except asyncio.CancelledError:
+            logger.info("Heartbeat loop stopped")
+            raise
+        except Exception as exc:
+            logger.warning(f"Heartbeat loop error: {exc}")
+
+        await asyncio.sleep(HEARTBEAT_INTERVAL)
 
 
 async def _deepvision_background_loop():
@@ -320,7 +365,13 @@ async def _deepvision_background_loop():
                 }
                 _save_deepvision_cache()
                 observer = get_alarm_observer()
-                await asyncio.to_thread(observer.process_analysis_result, payload, camera_id, camera_name)
+                await asyncio.to_thread(
+                    observer.process_analysis_result,
+                    payload,
+                    camera_id,
+                    camera_name,
+                    frame_jpeg,  # forward JPEG to CMP so images appear in Edge Devices / Incidents
+                )
 
             await asyncio.sleep(interval)
         except asyncio.CancelledError:
@@ -359,9 +410,11 @@ async def startup_event():
             "PPE-UI is optional (viewing/settings only). Ensure edge-cloud is up for Gemini (port 3001) "
             "unless EDGE_CLOUD_ANALYZE_URL points elsewhere."
         )
-        global _deepvision_task
+        global _deepvision_task, _heartbeat_task
         if _deepvision_task is None or _deepvision_task.done():
             _deepvision_task = asyncio.create_task(_deepvision_background_loop())
+        if _heartbeat_task is None or _heartbeat_task.done():
+            _heartbeat_task = asyncio.create_task(_heartbeat_loop())
         # Ensure edge-cloud is running regardless of VPN state
         _ensure_edge_cloud_running()
     except Exception as exc:
@@ -371,13 +424,14 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    global _deepvision_task
-    if _deepvision_task and not _deepvision_task.done():
-        _deepvision_task.cancel()
-        try:
-            await _deepvision_task
-        except asyncio.CancelledError:
-            pass
+    global _deepvision_task, _heartbeat_task
+    for task in (_deepvision_task, _heartbeat_task):
+        if task and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
 
 @app.get("/")

@@ -1,11 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatHKT } from "@/lib/utils";
 
 type Device = {
@@ -35,142 +32,112 @@ type Device = {
   reportCount: number;
 };
 
-function riskBadge(level: string) {
-  switch (level) {
-    case "High": return <Badge variant="destructive">{level}</Badge>;
-    case "Medium": return <Badge variant="default">{level}</Badge>;
-    default: return <Badge variant="secondary">{level}</Badge>;
+function StatusDot({ device }: { device: Device }) {
+  if (device.status === "maintenance") {
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-yellow-400 font-medium">
+        <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+        Maintenance
+      </span>
+    );
   }
+  if (device.isOnline) {
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-green-400 font-medium">
+        <span className="h-2.5 w-2.5 rounded-full bg-green-400 animate-pulse" />
+        Online
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-red-400 font-medium">
+      <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
+      Offline
+    </span>
+  );
+}
+
+function riskBadge(level: string) {
+  const l = level.toLowerCase();
+  if (l === "critical" || l === "high") return <Badge variant="destructive">{level}</Badge>;
+  if (l === "medium") return <Badge variant="default">{level}</Badge>;
+  return <Badge variant="secondary">{level}</Badge>;
 }
 
 export function EdgeDeviceList({ devices }: { devices: Device[] }) {
-  const [toggling, setToggling] = useState<string | null>(null);
-
-  async function toggleMaintenance(id: string, currentStatus: string) {
-    setToggling(id);
-    try {
-      await fetch(`/api/edge-devices/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: currentStatus === "maintenance" ? "online" : "maintenance",
-        }),
-      });
-      window.location.reload();
-    } finally {
-      setToggling(null);
-    }
-  }
-
-  async function deleteDevice(id: string) {
-    if (!confirm("Delete this edge device? This will also delete all its incidents and reports.")) return;
-    await fetch(`/api/edge-devices/${id}`, { method: "DELETE" });
-    window.location.reload();
+  if (devices.length === 0) {
+    return (
+      <div className="rounded-xl border border-dashed p-12 text-center text-muted-foreground">
+        <p className="text-lg font-medium mb-1">No edge devices registered</p>
+        <p className="text-sm">Devices auto-register when they send their first report to the CMP.</p>
+      </div>
+    );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Registered Edge Cameras</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Status</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Edge ID</TableHead>
-              <TableHead>Zone</TableHead>
-              <TableHead>Last Report</TableHead>
-              <TableHead>Risk</TableHead>
-              <TableHead>Evidence</TableHead>
-              <TableHead>Reports</TableHead>
-              <TableHead>Incidents</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {devices.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
-                  No edge devices registered. Devices auto-register when they send their first report.
-                </TableCell>
-              </TableRow>
-            )}
-            {devices.map((d) => (
-              <TableRow key={d.id}>
-                <TableCell>
-                  {d.status === "maintenance" ? (
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
-                      <span className="text-xs text-yellow-400">Maintenance</span>
-                    </span>
-                  ) : d.isOnline ? (
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full bg-green-400 animate-pulse" />
-                      <span className="text-xs text-green-400">Online</span>
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                      <span className="text-xs text-red-400">Offline</span>
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell className="font-medium">
-                  <Link href={`/edge-devices/${d.id}`} className="hover:underline">
-                    {d.name}
-                  </Link>
-                </TableCell>
-                <TableCell className="font-mono text-xs">{d.edgeCameraId ?? "—"}</TableCell>
-                <TableCell>{d.zone?.name ?? "—"}</TableCell>
-                <TableCell className="text-xs">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {devices.map((d) => (
+        <Link key={d.id} href={`/edge-devices/${d.id}`} className="group block">
+          <Card className="h-full transition-all duration-150 hover:border-primary/60 hover:shadow-md group-focus-visible:ring-2 ring-primary">
+            {/* Thumbnail */}
+            <div className="relative overflow-hidden rounded-t-xl bg-muted/30 h-36">
+              {d.latestAlertEvidence?.eventImagePath ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={d.latestAlertEvidence.eventImagePath}
+                  alt={`${d.name} latest alert`}
+                  className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-muted-foreground/40">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                  </svg>
+                </div>
+              )}
+              {/* Risk overlay badge */}
+              {d.latestReport && (
+                <div className="absolute top-2 right-2">
+                  {riskBadge(d.latestReport.overallRiskLevel)}
+                </div>
+              )}
+              {/* Status dot */}
+              <div className="absolute top-2 left-2 rounded-full bg-background/80 px-2 py-0.5 backdrop-blur-sm">
+                <StatusDot device={d} />
+              </div>
+            </div>
+
+            <CardContent className="p-4 space-y-2">
+              {/* Name */}
+              <p className="font-semibold text-sm leading-tight truncate">{d.name}</p>
+
+              {/* Project / Zone */}
+              <p className="text-xs text-muted-foreground truncate">
+                {d.project?.name ?? "—"}
+                {d.zone?.name ? ` · ${d.zone.name}` : ""}
+              </p>
+
+              {/* Latest description */}
+              {d.latestReport?.overallDescription && (
+                <p className="text-xs text-muted-foreground/80 line-clamp-2 leading-relaxed">
+                  {d.latestReport.overallDescription}
+                </p>
+              )}
+
+              {/* Footer stats */}
+              <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                <span className="text-xs text-muted-foreground">
                   {d.lastReportAt ? formatHKT(d.lastReportAt) : "Never"}
-                </TableCell>
-                <TableCell>
-                  {d.latestReport ? riskBadge(d.latestReport.overallRiskLevel) : "—"}
-                </TableCell>
-                <TableCell className="text-xs">
-                  {d.latestAlertEvidence ? (
-                    <Link href={`/api/edge-reports/${d.latestAlertEvidence.id}/image`} target="_blank" className="underline">
-                      View alert image
-                    </Link>
-                  ) : (
-                    <span className="text-muted-foreground">No alerted evidence</span>
-                  )}
-                </TableCell>
-                <TableCell>{d.reportCount}</TableCell>
-                <TableCell>{d.incidentCount}</TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Link href={`/edge-devices/${d.id}`}>
-                      <Button size="sm" variant="outline">
-                        Edit
-                      </Button>
-                    </Link>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={toggling === d.id}
-                      onClick={() => toggleMaintenance(d.id, d.status)}
-                    >
-                      {d.status === "maintenance" ? "Enable" : "Maint."}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-red-400 hover:text-red-300"
-                      onClick={() => deleteDevice(d.id)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+                </span>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span title="Reports">{d.reportCount} rpt</span>
+                  <span title="Incidents">{d.incidentCount} inc</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      ))}
+    </div>
   );
 }

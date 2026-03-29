@@ -5,8 +5,30 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatHKT } from "@/lib/utils";
+import { BoundingBoxCanvas } from "@/components/edge-devices/bounding-box-canvas";
+import type { Detection } from "@/components/edge-devices/bounding-box-canvas";
 
 type Props = { params: { id: string } };
+
+/** Extract the validated detections array from rawJson stored by the webhook handler. */
+function extractDetections(rawJson: unknown): Detection[] {
+  if (!rawJson || typeof rawJson !== "object") return [];
+  const payload = rawJson as Record<string, unknown>;
+  const analysis = payload.analysis && typeof payload.analysis === "object"
+    ? (payload.analysis as Record<string, unknown>)
+    : payload;
+  const dets = analysis.detections;
+  if (!Array.isArray(dets)) return [];
+  return dets
+    .filter(
+      (d): d is Detection =>
+        d !== null &&
+        typeof d === "object" &&
+        typeof (d as Record<string, unknown>).label === "string" &&
+        Array.isArray((d as Record<string, unknown>).bbox) &&
+        ((d as Record<string, unknown>).bbox as unknown[]).length === 4
+    );
+}
 
 function riskBadgeVariant(level: string): "secondary" | "default" | "destructive" {
   const v = level.toLowerCase();
@@ -45,7 +67,14 @@ export default async function EdgeReportDetailPage({ params }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Edge:</span>
           <Badge variant={riskBadgeVariant(report.overallRiskLevel)}>{report.overallRiskLevel}</Badge>
+          {report.cmpRiskLevel && (
+            <>
+              <span className="text-xs text-muted-foreground">CMP:</span>
+              <Badge variant={riskBadgeVariant(report.cmpRiskLevel)}>{report.cmpRiskLevel}</Badge>
+            </>
+          )}
           <Badge variant="outline">{report.messageType}</Badge>
         </div>
       </div>
@@ -63,6 +92,13 @@ export default async function EdgeReportDetailPage({ params }: Props) {
           <Row label="Keepalive" value={report.keepalive ? "true" : "false"} />
           <Row label="Image Included Flag" value={report.eventImageIncluded ? "true" : "false"} />
           <Row label="Image MIME Type" value={report.eventImageMimeType ?? "—"} />
+          {report.classificationJson !== null && typeof report.classificationJson === "object" &&
+            Boolean((report.classificationJson as Record<string, unknown>).classifierModel) && (
+            <Row label="Classifier model" value={String((report.classificationJson as Record<string, unknown>).classifierModel)} />
+          )}
+          {report.visionVerificationJson !== null && typeof report.visionVerificationJson === "object" && (
+            <Row label="Vision model" value={String((report.visionVerificationJson as Record<string, unknown>).model ?? "vision-verified")} />
+          )}
           {report.camera?.streamUrl && (
             <div className="pt-1">
               <span className="text-muted-foreground">Camera Stream</span>
@@ -87,16 +123,22 @@ export default async function EdgeReportDetailPage({ params }: Props) {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Evidence Image</CardTitle>
+          <CardTitle className="text-sm flex items-center gap-2">
+            Evidence Image
+            {extractDetections(report.rawJson).length > 0 && (
+              <Badge variant="outline" className="text-xs">
+                {extractDetections(report.rawJson).length} detection{extractDetections(report.rawJson).length > 1 ? "s" : ""}
+              </Badge>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {report.eventImagePath ? (
             <div className="space-y-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={report.eventImagePath}
-                alt="Edge report evidence"
-                className="max-h-[70vh] w-full rounded border object-contain"
+              <BoundingBoxCanvas
+                imageUrl={report.eventImagePath}
+                detections={extractDetections(report.rawJson)}
+                className="max-h-[70vh]"
               />
               <p className="text-xs text-muted-foreground break-all">{report.eventImagePath}</p>
             </div>
@@ -132,6 +174,10 @@ export default async function EdgeReportDetailPage({ params }: Props) {
           </CardContent>
         </Card>
       </div>
+
+      {report.visionVerificationJson && (
+        <VisionVerificationCard data={report.visionVerificationJson} />
+      )}
 
       <div>
         <Link href="/incidents" className="text-sm text-primary hover:underline">
@@ -169,6 +215,84 @@ function normalizeSafetyData(value: unknown): SafetyData {
       ? obj.recommendations.filter((x): x is string => typeof x === "string")
       : [],
   };
+}
+
+type VisionVerification = {
+  descriptionAccuracy?: string;
+  missedHazards?: string[];
+  incorrectClaims?: string[];
+  summary?: string;
+  visionClassifications?: Array<{
+    type: string;
+    detected: boolean;
+    riskLevel: string;
+    confidence: number;
+    reasoning: string;
+  }>;
+};
+
+function accuracyColor(acc: string): string {
+  if (acc === "accurate") return "text-green-500";
+  if (acc === "partially_accurate") return "text-yellow-500";
+  return "text-red-500";
+}
+
+function VisionVerificationCard({ data }: { data: unknown }) {
+  const v = data as VisionVerification;
+  const detected = (v.visionClassifications ?? []).filter((c) => c.detected);
+
+  return (
+    <Card className="border-blue-500/30 bg-blue-950/10">
+      <CardHeader>
+        <CardTitle className="text-sm flex items-center gap-2">
+          <span>CMP Vision Verification</span>
+          {v.descriptionAccuracy && (
+            <span className={`text-xs font-normal ${accuracyColor(v.descriptionAccuracy)}`}>
+              {v.descriptionAccuracy.replace("_", " ")}
+            </span>
+          )}
+        </CardTitle>
+        {v.summary && (
+          <p className="text-xs text-muted-foreground">{v.summary}</p>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
+        {v.missedHazards && v.missedHazards.length > 0 && (
+          <div>
+            <p className="text-xs uppercase tracking-wide text-yellow-500 mb-1">Missed by edge</p>
+            <ul className="list-disc pl-5 space-y-1">
+              {v.missedHazards.map((h, i) => <li key={i}>{h}</li>)}
+            </ul>
+          </div>
+        )}
+        {v.incorrectClaims && v.incorrectClaims.length > 0 && (
+          <div>
+            <p className="text-xs uppercase tracking-wide text-red-400 mb-1">Incorrect claims from edge</p>
+            <ul className="list-disc pl-5 space-y-1">
+              {v.incorrectClaims.map((c, i) => <li key={i}>{c}</li>)}
+            </ul>
+          </div>
+        )}
+        {detected.length > 0 && (
+          <div>
+            <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Vision-detected incidents</p>
+            <div className="space-y-1">
+              {detected.map((c, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <Badge variant={riskBadgeVariant(c.riskLevel)} className="shrink-0 text-xs">{c.riskLevel}</Badge>
+                  <span className="font-mono text-xs">{c.type}</span>
+                  <span className="text-muted-foreground text-xs">({Math.round(c.confidence * 100)}%) — {c.reasoning}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {detected.length === 0 && !v.missedHazards?.length && !v.incorrectClaims?.length && (
+          <p className="text-muted-foreground text-xs">Vision model found no additional issues.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function SafetyReportSection({ data }: { data: unknown }) {

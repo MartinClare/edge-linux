@@ -46,7 +46,7 @@
       }
     ],
     "fpsLimit": 15,
-    "geminiInterval": 300,
+    "geminiInterval": 5,
     "autoStart": true
   },
   "debug": {

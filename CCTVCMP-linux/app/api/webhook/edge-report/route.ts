@@ -1,15 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { edgeReportSchema } from "@/lib/validations/webhook";
 import { classifyAnalysis } from "@/lib/llm-classifier";
 import { evaluateAlarms, ensureDefaultRules } from "@/lib/alarm-engine";
+import { verifyWithVision, reconcileClassifications } from "@/lib/vision-verifier";
+
+// ── LLM rate limiting ─────────────────────────────────────────────────────────
+//
+// The edge sends one webhook per camera every `geminiInterval` seconds (default 5 s,
+// rotating through N cameras).  Without a gate the CMP would call the LLM on every
+// incoming report, burning tokens and hitting API rate limits.
+//
+// Design:
+//   • One LLM call (text + optional vision) per camera per LLM_RATE_LIMIT_MS.
+//   • Hard minimum: 60 000 ms (1 per minute), regardless of env var.
+//   • Vision has its own (longer) limit since it sends the full JPEG.
+//   • Rate-limited reports are still stored and still receive a risk level — the
+//     last successful classification is propagated so the UI is never stale.
+//   • The in-memory Maps reset on cold start (Vercel): at most one extra call per
+//     warm-up, which is acceptable.
+//
+// Configure via env vars (values below are in seconds):
+//   LLM_RATE_LIMIT_SECONDS   — text classifier   (default 60, min 60)
+//   VISION_RATE_LIMIT_SECONDS — vision verifier   (default 120, min 60)
+
+const _parseSec = (key: string, fallback: number) =>
+  Math.max(60, parseInt(process.env[key] ?? String(fallback)) || fallback);
+
+const LLM_RATE_LIMIT_MS    = _parseSec("LLM_RATE_LIMIT_SECONDS",    60)  * 1000;
+const VISION_RATE_LIMIT_MS = _parseSec("VISION_RATE_LIMIT_SECONDS", 120) * 1000;
+
+/** cameraId → ms timestamp of last LLM call for that camera. */
+const lastTextLLMAt   = new Map<string, number>();
+const lastVisionLLMAt = new Map<string, number>();
 
 function getApiKey(request: NextRequest): string | null {
   return request.headers.get("x-api-key") ?? request.headers.get("X-API-Key");
 }
 
-function isActionableRisk(level: string): boolean {
-  return level === "Medium" || level === "High" || level === "Critical";
+/** All analysis reports are forwarded for CMP classification and alarm evaluation.
+ *  CMP decides which incidents to create based on its own alarm rules — the edge
+ *  does not gate by risk level. */
+function isAnalysisReport(messageType: string, keepalive: boolean): boolean {
+  return messageType === "analysis" && !keepalive;
 }
 
 async function parseRequestBody(request: NextRequest): Promise<
@@ -60,26 +94,163 @@ async function parseRequestBody(request: NextRequest): Promise<
 }
 
 /**
- * Background task: classify the saved EdgeReport and evaluate alarms.
+ * Derive the highest risk level across all detected classifications.
+ * This is the CMP's own overall assessment — independent of what the edge reported.
+ */
+function deriveCmpRiskLevel(classifications: import("@/lib/llm-classifier").Classification[]): string {
+  const ORDER: Record<string, number> = { low: 0, medium: 1, high: 2, critical: 3 };
+  const detected = classifications.filter((c) => c.detected);
+  if (detected.length === 0) return "Low";
+  const top = detected.reduce((best, c) =>
+    (ORDER[c.riskLevel] ?? 0) > (ORDER[best.riskLevel] ?? 0) ? c : best
+  );
+  // Capitalise first letter to match stored overallRiskLevel format ("Low","Medium","High","Critical")
+  return top.riskLevel.charAt(0).toUpperCase() + top.riskLevel.slice(1);
+}
+
+/**
+ * Propagate the last successful classification to a rate-limited report so
+ * every report in the UI has a cmpRiskLevel and classificationJson, even when
+ * the LLM was skipped.  Alarm evaluation is re-run against the cached result
+ * so incidents still fire on the correct schedule.
+ */
+async function propagateLastClassification(
+  edgeReportId: string,
+  cameraContext: { cameraId: string; projectId: string; zoneId: string },
+  detectedAt: Date,
+  throttledForMs: number
+) {
+  const last = await prisma.edgeReport.findFirst({
+    where: {
+      cameraId: cameraContext.cameraId,
+      NOT: { classificationJson: { equals: Prisma.JsonNull } },
+      id: { not: edgeReportId },
+    },
+    orderBy: { receivedAt: "desc" },
+    select: { classificationJson: true, cmpRiskLevel: true },
+  });
+
+  if (last?.classificationJson && last.cmpRiskLevel) {
+    await prisma.edgeReport.update({
+      where: { id: edgeReportId },
+      data: {
+        cmpRiskLevel: last.cmpRiskLevel,
+        classificationJson: last.classificationJson,
+      },
+    });
+
+    // Still run alarm evaluation so dedup logic sees consecutive hits
+    const cachedResult = last.classificationJson as { classifications: import("@/lib/llm-classifier").Classification[] };
+    if (Array.isArray(cachedResult?.classifications)) {
+      await evaluateAlarms(
+        { classifications: cachedResult.classifications, source: "llm" },
+        cameraContext,
+        edgeReportId,
+        detectedAt
+      );
+    }
+
+    console.log(
+      `[webhook] Rate-limited camera=${cameraContext.cameraId} (${(throttledForMs / 1000).toFixed(1)}s < ${LLM_RATE_LIMIT_MS / 1000}s min) — propagated last classification (${last.cmpRiskLevel})`
+    );
+  } else {
+    console.log(
+      `[webhook] Rate-limited camera=${cameraContext.cameraId} — no previous classification to propagate yet`
+    );
+  }
+}
+
+/**
+ * Background task: classify the saved EdgeReport, optionally verify with the
+ * image, reconcile the two, then evaluate alarms.
  * Runs after the HTTP response is already sent so the edge device isn't blocked.
+ *
+ * Rate limiting: at most one LLM call per camera per LLM_RATE_LIMIT_MS (text)
+ * and per VISION_RATE_LIMIT_MS (vision).  Rate-limited reports still receive
+ * a cmpRiskLevel by propagating the previous classification.
  */
 async function processReportBackground(
   edgeReportId: string,
   analysis: Parameters<typeof classifyAnalysis>[0],
   cameraContext: { cameraId: string; projectId: string; zoneId: string },
-  detectedAt: Date
+  detectedAt: Date,
+  imageBytes?: Buffer,
+  imageMimeType?: string
 ) {
   try {
     await ensureDefaultRules();
 
-    const classification = await classifyAnalysis(analysis);
+    const now = Date.now();
+    const { cameraId } = cameraContext;
+
+    // ── Text-classifier rate gate ─────────────────────────────────────────────
+    const timeSinceText = now - (lastTextLLMAt.get(cameraId) ?? 0);
+    if (timeSinceText < LLM_RATE_LIMIT_MS) {
+      await propagateLastClassification(edgeReportId, cameraContext, detectedAt, timeSinceText);
+      return;
+    }
+    lastTextLLMAt.set(cameraId, now);
+
+    // 1. Text-based classification (LLM or keyword fallback)
+    const textClassification = await classifyAnalysis(analysis);
+    console.log(
+      `[webhook] LLM text classify camera=${cameraId} source=${textClassification.source} model=${textClassification.classifierModel ?? "fallback"} ` +
+      `detected=${textClassification.classifications.filter((c) => c.detected).map((c) => c.type).join(",") || "none"} ` +
+      `(last was ${(timeSinceText / 1000).toFixed(1)}s ago)`
+    );
+
+    let finalClassification = textClassification;
+
+    // ── Vision-verifier rate gate ─────────────────────────────────────────────
+    const canRunVision = imageBytes && imageMimeType;
+    if (canRunVision) {
+      const timeSinceVision = now - (lastVisionLLMAt.get(cameraId) ?? 0);
+      if (timeSinceVision >= VISION_RATE_LIMIT_MS) {
+        lastVisionLLMAt.set(cameraId, now);
+
+        const visionResult = await verifyWithVision(imageBytes, imageMimeType, analysis).catch((err) => {
+          console.error("[webhook] Vision verification failed:", err);
+          return null;
+        });
+
+        if (visionResult) {
+          const reconciledClassifications = reconcileClassifications(
+            textClassification.classifications,
+            visionResult.visionClassifications
+          );
+          finalClassification = {
+            classifications: reconciledClassifications,
+            source: "vision",
+            classifierModel: textClassification.classifierModel,
+            visionVerification: visionResult,
+          };
+          console.log(
+            `[webhook] Vision verify camera=${cameraId} accuracy=${visionResult.descriptionAccuracy} ` +
+            `missed=${visionResult.missedHazards.length} incorrect=${visionResult.incorrectClaims.length} ` +
+            `(last was ${(timeSinceVision / 1000).toFixed(1)}s ago)`
+          );
+        }
+      } else {
+        console.log(
+          `[webhook] Vision rate-limited camera=${cameraId} (${(timeSinceVision / 1000).toFixed(1)}s < ${VISION_RATE_LIMIT_MS / 1000}s min) — text-only classification used`
+        );
+      }
+    }
+
+    const cmpRiskLevel = deriveCmpRiskLevel(finalClassification.classifications);
 
     await prisma.edgeReport.update({
       where: { id: edgeReportId },
-      data: { classificationJson: classification as object },
+      data: {
+        classificationJson: finalClassification as object,
+        cmpRiskLevel,
+        visionVerificationJson: finalClassification.visionVerification
+          ? (finalClassification.visionVerification as object)
+          : undefined,
+      },
     });
 
-    await evaluateAlarms(classification, cameraContext, edgeReportId, detectedAt);
+    await evaluateAlarms(finalClassification, cameraContext, edgeReportId, detectedAt);
   } catch (err) {
     console.error("[webhook] Background processing failed for report", edgeReportId, err);
   }
@@ -198,6 +369,7 @@ export async function POST(request: NextRequest) {
       peopleCount: analysis?.peopleCount ?? null,
       missingHardhats: analysis?.missingHardhats ?? null,
       missingVests: analysis?.missingVests ?? null,
+      // detections stored in rawJson.analysis.detections (no separate column needed)
       rawJson: fullPayload as object,
     },
   });
@@ -215,13 +387,15 @@ export async function POST(request: NextRequest) {
     data: { lastReportAt: eventTimestamp, status: "online", name: cameraName },
   });
 
-  // --- 3. Fire background processing for actionable analysis reports only ---
-  if (messageType === "analysis" && !keepalive && analysis && isActionableRisk(analysis.overallRiskLevel)) {
+  // --- 3. Fire background processing for ALL analysis reports (CMP decides severity) ---
+  if (analysis && isAnalysisReport(messageType, keepalive)) {
     processReportBackground(
       edgeReport.id,
       analysis as Parameters<typeof classifyAnalysis>[0],
       { cameraId: camera.id, projectId: camera.projectId, zoneId },
-      eventTimestamp
+      eventTimestamp,
+      parsedBody.image?.bytes,
+      parsedBody.image?.mimeType
     ).catch(() => { /* already logged inside */ });
   }
 

@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 import requests
 
-from .cmp_webhook import build_edge_report_json_body
+from .cmp_webhook import build_edge_report_json_body, build_keepalive_json_body
 
 # Configure logging
 logging.basicConfig(
@@ -521,8 +521,20 @@ class AlarmObserver:
         except Exception as e:
             logger.error(f"Error sending webhook notification: {e}")
     
-    def _send_to_central_server(self, camera_id: str, camera_name: str, analysis_result: Dict) -> None:
-        """Send every analysis result to the central monitoring platform webhook (runs in background)."""
+    def _send_to_central_server(
+        self,
+        camera_id: str,
+        camera_name: str,
+        analysis_result: Dict,
+        image_jpeg: Optional[bytes] = None,
+    ) -> None:
+        """Send every analysis result to the central monitoring platform webhook (runs in background).
+
+        If image_jpeg bytes are provided the request is sent as multipart/form-data with
+        the JSON payload in the 'payload' field and the image in the 'image' field, so the
+        CMP can store and display the frame that triggered the analysis.
+        Without image bytes the request falls back to plain application/json.
+        """
         cfg = self.central_server_config
         if not cfg.get("enabled") or not cfg.get("url") or not cfg.get("apiKey"):
             return
@@ -535,6 +547,7 @@ class AlarmObserver:
             camera_id,
             camera_name or camera_id,
             analysis_result,
+            include_image=image_jpeg is not None,
         )
 
         def _b64url(data: bytes) -> str:
@@ -574,19 +587,25 @@ class AlarmObserver:
             auth_token = _generate_jwt(jwt_secret) if jwt_secret else ""
             for attempt in range(retry_attempts):
                 try:
-                    headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+                    base_headers = {"X-API-Key": api_key}
                     if auth_token:
-                        headers["Authorization"] = f"Bearer {auth_token}"
-                    resp = requests.post(
-                        url,
-                        json=payload,
-                        headers=headers,
-                        timeout=30,
-                    )
+                        base_headers["Authorization"] = f"Bearer {auth_token}"
+
+                    if image_jpeg:
+                        # multipart: 'payload' field carries JSON; 'image' field carries JPEG bytes
+                        files = {
+                            "payload": (None, json.dumps(payload), "application/json"),
+                            "image": ("frame.jpg", image_jpeg, "image/jpeg"),
+                        }
+                        resp = requests.post(url, files=files, headers=base_headers, timeout=30)
+                    else:
+                        base_headers["Content-Type"] = "application/json"
+                        resp = requests.post(url, json=payload, headers=base_headers, timeout=30)
+
                     if resp.ok:
-                        logger.info(f"Central server report sent for {camera_id}")
+                        logger.info(f"Central server report sent for {camera_id} (image={'yes' if image_jpeg else 'no'})")
                         return
-                    logger.warning(f"Central server returned {resp.status_code} (attempt {attempt + 1}/{retry_attempts})")
+                    logger.warning(f"Central server returned {resp.status_code} (attempt {attempt + 1}/{retry_attempts}): {resp.text[:200]}")
                 except Exception as e:
                     logger.warning(f"Central server attempt {attempt + 1}/{retry_attempts} failed: {e}")
                 if attempt < retry_attempts - 1:
@@ -690,21 +709,58 @@ class AlarmObserver:
             return True
         return False
     
-    def process_analysis_result(self, analysis_result: Dict, camera_id: str, camera_name: Optional[str] = None) -> Optional[AlarmEvent]:
+    def send_keepalive(self, camera_id: str, camera_name: str) -> None:
+        """Send a keepalive / heartbeat ping to CMP for a single camera.
+
+        CMP updates Camera.lastReportAt on every keepalive so the Edge Devices list
+        continues to show the camera as 'online' (within the 5-minute online window)
+        even during quiet periods when no new analysis is produced.
+        """
+        cfg = self.central_server_config
+        if not cfg.get("enabled") or not cfg.get("url") or not cfg.get("apiKey"):
+            return
+
+        payload = build_keepalive_json_body(camera_id, camera_name)
+        url = cfg.get("url", "").rstrip("/")
+        api_key = cfg.get("apiKey", "")
+
+        def _do_keepalive() -> None:
+            try:
+                resp = requests.post(
+                    url,
+                    json=payload,
+                    headers={"X-API-Key": api_key, "Content-Type": "application/json"},
+                    timeout=15,
+                )
+                if resp.ok:
+                    logger.debug(f"Keepalive sent for {camera_id}")
+                else:
+                    logger.warning(f"Keepalive {camera_id} got {resp.status_code}")
+            except Exception as exc:
+                logger.warning(f"Keepalive {camera_id} failed: {exc}")
+
+        threading.Thread(target=_do_keepalive, daemon=True).start()
+
+    def process_analysis_result(
+        self,
+        analysis_result: Dict,
+        camera_id: str,
+        camera_name: Optional[str] = None,
+        image_jpeg: Optional[bytes] = None,
+    ) -> Optional[AlarmEvent]:
         """
         Process a Deep Vision analysis result and trigger alarm if necessary.
-        
-        This is the main entry point for the alarm observer.
-        
+
         Args:
             analysis_result: Gemini analysis result
             camera_id: Camera identifier
             camera_name: Optional display name for the camera (used when sending to central server)
-            
+            image_jpeg: Optional JPEG bytes of the frame that was analysed; forwarded to CMP if provided.
+
         Returns:
             AlarmEvent if alarm was triggered, None otherwise
         """
-        self._send_to_central_server(camera_id, camera_name or camera_id, analysis_result)
+        self._send_to_central_server(camera_id, camera_name or camera_id, analysis_result, image_jpeg=image_jpeg)
 
         if not self.config.get('alarmSystem', {}).get('enabled', False):
             return None

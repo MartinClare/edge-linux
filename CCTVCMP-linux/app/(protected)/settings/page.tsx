@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
-import { ensureDefaultRules } from "@/lib/alarm-engine";
+import { ensureDefaultRules, migrateCriticalAlertRules } from "@/lib/alarm-engine";
 
 export default async function SettingsPage() {
   await ensureDefaultRules();
+  // Self-heal: upgrade any rules still at old defaults to critical-alert standards
+  await migrateCriticalAlertRules();
 
   const [rules, channels] = await Promise.all([
     prisma.alarmRule.findMany({ orderBy: { createdAt: "asc" } }),

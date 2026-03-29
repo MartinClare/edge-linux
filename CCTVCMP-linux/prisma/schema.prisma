@@ -200,8 +200,10 @@ model EdgeReport {
   peopleCount        Int?     @map("people_count")
   missingHardhats    Int?     @map("missing_hardhats")
   missingVests       Int?     @map("missing_vests")
-  rawJson            Json     @map("raw_json")
-  classificationJson Json?    @map("classification_json")
+  rawJson                Json     @map("raw_json")
+  classificationJson     Json?    @map("classification_json")
+  cmpRiskLevel           String?  @map("cmp_risk_level")
+  visionVerificationJson Json?    @map("vision_verification_json")
   receivedAt         DateTime @default(now()) @map("received_at")
 
   camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)

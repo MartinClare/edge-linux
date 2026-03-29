@@ -166,14 +166,16 @@ export async function ensureDefaultRules(): Promise<void> {
     consecutiveHits: number;
     recordOnly: boolean;
   }> = [
-    { name: "PPE Violation", incidentType: "ppe_violation", minRiskLevel: "medium", dedupMinutes: 5, consecutiveHits: 1, recordOnly: false },
-    { name: "Fall Risk", incidentType: "fall_risk", minRiskLevel: "medium", dedupMinutes: 10, consecutiveHits: 1, recordOnly: false },
-    { name: "Fire Detected", incidentType: "fire_detected", minRiskLevel: "low", dedupMinutes: 2, consecutiveHits: 1, recordOnly: false },
-    { name: "Smoke Detected", incidentType: "smoke_detected", minRiskLevel: "low", dedupMinutes: 5, consecutiveHits: 1, recordOnly: false },
-    { name: "Restricted Zone Entry", incidentType: "restricted_zone_entry", minRiskLevel: "medium", dedupMinutes: 10, consecutiveHits: 1, recordOnly: false },
-    { name: "Machinery Hazard", incidentType: "machinery_hazard", minRiskLevel: "medium", dedupMinutes: 10, consecutiveHits: 1, recordOnly: false },
-    { name: "Near Miss", incidentType: "near_miss", minRiskLevel: "medium", dedupMinutes: 15, consecutiveHits: 2, recordOnly: true },
-    { name: "Smoking", incidentType: "smoking", minRiskLevel: "low", dedupMinutes: 15, consecutiveHits: 1, recordOnly: true },
+    // ── Critical alert types ── popup shown, 5-min cooldown, high floor ──────
+    { name: "PPE Violation",    incidentType: "ppe_violation",    minRiskLevel: "high",   dedupMinutes: 5,  consecutiveHits: 1, recordOnly: false },
+    { name: "Smoking",          incidentType: "smoking",          minRiskLevel: "high",   dedupMinutes: 5,  consecutiveHits: 1, recordOnly: false },
+    { name: "Fire Detected",    incidentType: "fire_detected",    minRiskLevel: "high",   dedupMinutes: 5,  consecutiveHits: 1, recordOnly: false },
+    { name: "Machinery Hazard", incidentType: "machinery_hazard", minRiskLevel: "high",   dedupMinutes: 5,  consecutiveHits: 1, recordOnly: false },
+    // ── Standard alert types ─────────────────────────────────────────────────
+    { name: "Fall Risk",              incidentType: "fall_risk",              minRiskLevel: "medium", dedupMinutes: 10, consecutiveHits: 1, recordOnly: false },
+    { name: "Smoke Detected",         incidentType: "smoke_detected",         minRiskLevel: "medium", dedupMinutes: 5,  consecutiveHits: 1, recordOnly: false },
+    { name: "Restricted Zone Entry",  incidentType: "restricted_zone_entry",  minRiskLevel: "medium", dedupMinutes: 10, consecutiveHits: 1, recordOnly: false },
+    { name: "Near Miss",              incidentType: "near_miss",              minRiskLevel: "medium", dedupMinutes: 15, consecutiveHits: 2, recordOnly: true  },
   ];
 
   for (const d of defaults) {
@@ -184,4 +186,59 @@ export async function ensureDefaultRules(): Promise<void> {
 
   _defaultRulesSeeded = true;
   console.log("[AlarmEngine] Seeded default alarm rules");
+}
+
+/**
+ * The three categories that always produce an immediate popup alert in the CMP UI
+ * regardless of other alarm-rule settings.
+ */
+export const CRITICAL_ALERT_TYPES = [
+  "ppe_violation",
+  "smoking",
+  "fire_detected",
+  "machinery_hazard",
+] as const;
+
+export type CriticalAlertType = typeof CRITICAL_ALERT_TYPES[number];
+
+/**
+ * Ensure the four critical-alert rules exist with correct defaults.
+ * Safe to call repeatedly; only updates rules whose values still match the
+ * *old* (pre-critical) defaults so that manual admin changes are preserved.
+ */
+export async function migrateCriticalAlertRules(): Promise<void> {
+  const targets = [
+    { incidentType: "ppe_violation",    name: "PPE Violation",    oldMinRisk: "medium" as IncidentRiskLevel },
+    { incidentType: "smoking",          name: "Smoking",          oldMinRisk: "low"    as IncidentRiskLevel },
+    { incidentType: "fire_detected",    name: "Fire Detected",    oldMinRisk: "low"    as IncidentRiskLevel },
+    { incidentType: "machinery_hazard", name: "Machinery Hazard", oldMinRisk: "medium" as IncidentRiskLevel },
+  ];
+
+  for (const t of targets) {
+    const rule = await prisma.alarmRule.findFirst({ where: { incidentType: t.incidentType as import("@prisma/client").IncidentType } });
+    if (!rule) {
+      // Create if missing (handles fresh installs where seeding hasn't run yet)
+      await prisma.alarmRule.create({
+        data: {
+          name: t.name,
+          incidentType: t.incidentType,
+          minRiskLevel: "high",
+          dedupMinutes: 5,
+          consecutiveHits: 1,
+          recordOnly: false,
+        } as Parameters<typeof prisma.alarmRule.create>[0]["data"],
+      });
+    } else if (rule.minRiskLevel === t.oldMinRisk || rule.recordOnly) {
+      // Update only if still at old default (not manually customised)
+      await prisma.alarmRule.update({
+        where: { id: rule.id },
+        data: {
+          minRiskLevel: "high",
+          dedupMinutes: rule.dedupMinutes === 15 || rule.dedupMinutes === 2 ? 5 : rule.dedupMinutes,
+          recordOnly: false,
+        },
+      });
+      console.log(`[AlarmEngine] Migrated critical rule: ${t.incidentType}`);
+    }
+  }
 }

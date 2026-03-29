@@ -30,14 +30,20 @@ type Channel = {
   _count: { logs: number };
 };
 
+/** Incident types that always show a blocking popup alert in the CMP UI. */
+const CRITICAL_ALERT_TYPES = ["ppe_violation", "smoking", "fire_detected", "machinery_hazard"];
+
 export function SettingsTabs({ rules, channels }: { rules: AlarmRule[]; channels: Channel[] }) {
-  const [tab, setTab] = useState<"rules" | "channels" | "edge">("rules");
+  const [tab, setTab] = useState<"critical" | "rules" | "channels" | "edge">("critical");
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
+        <Button variant={tab === "critical" ? "default" : "outline"} onClick={() => setTab("critical")}>
+          Critical Alerts
+        </Button>
         <Button variant={tab === "rules" ? "default" : "outline"} onClick={() => setTab("rules")}>
-          Alarm Rules
+          All Alarm Rules
         </Button>
         <Button variant={tab === "channels" ? "default" : "outline"} onClick={() => setTab("channels")}>
           Notification Channels
@@ -47,13 +53,106 @@ export function SettingsTabs({ rules, channels }: { rules: AlarmRule[]; channels
         </Button>
       </div>
 
-      {tab === "rules" ? (
+      {tab === "critical" ? (
+        <CriticalAlertsTab rules={rules.filter((r) => CRITICAL_ALERT_TYPES.includes(r.incidentType))} />
+      ) : tab === "rules" ? (
         <AlarmRulesTab rules={rules} />
       ) : tab === "channels" ? (
         <NotificationChannelsTab channels={channels} />
       ) : (
         <EdgeIntegrationHelp />
       )}
+    </div>
+  );
+}
+
+const CRITICAL_LABELS: Record<string, { label: string; description: string }> = {
+  ppe_violation:    { label: "PPE Violation",    description: "Someone on site without required hard hat or hi-vis vest" },
+  smoking:          { label: "Smoking",           description: "Smoking detected on site" },
+  fire_detected:    { label: "Fire Detected",     description: "Active flame or fire visible" },
+  machinery_hazard: { label: "Machinery Hazard",  description: "Worker too close to operating machinery" },
+};
+
+function CriticalAlertsTab({ rules }: { rules: AlarmRule[] }) {
+  const [saving, setSaving] = useState<string | null>(null);
+  const [values, setValues] = useState<Record<string, number>>(
+    Object.fromEntries(rules.map((r) => [r.id, r.dedupMinutes]))
+  );
+
+  async function saveCooldown(id: string) {
+    setSaving(id);
+    await fetch(`/api/alarm-rules/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dedupMinutes: values[id] }),
+    });
+    setSaving(null);
+  }
+
+  return (
+    <div className="space-y-4">
+      <Card className="border-orange-500/30 bg-orange-950/10">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <span className="inline-block h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+            Critical Safety Alerts
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            These four incident types trigger an immediate blocking popup in the CMP UI so
+            operators cannot miss them. A cooldown prevents duplicate popups for the same camera
+            within the configured window. The popup reappears automatically when a new event
+            occurs after the cooldown expires.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {rules.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Rules not yet seeded — trigger a webhook report to auto-create them.
+            </p>
+          )}
+          {rules.map((rule) => {
+            const meta = CRITICAL_LABELS[rule.incidentType];
+            return (
+              <div
+                key={rule.id}
+                className="flex items-center justify-between gap-4 rounded-lg border border-orange-500/20 bg-orange-950/20 p-4"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm">{meta?.label ?? rule.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{meta?.description}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="destructive" className="text-xs">HIGH risk floor</Badge>
+                    <Badge variant="outline" className="text-xs">Popup enabled</Badge>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground mb-1">Cooldown (minutes)</p>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="60"
+                      className="w-20 text-center"
+                      value={values[rule.id] ?? rule.dedupMinutes}
+                      onChange={(e) =>
+                        setValues((v) => ({ ...v, [rule.id]: parseInt(e.target.value) || 1 }))
+                      }
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={saving === rule.id || values[rule.id] === rule.dedupMinutes}
+                    onClick={() => saveCooldown(rule.id)}
+                    className="mt-5"
+                  >
+                    {saving === rule.id ? "Saving…" : "Save"}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </CardContent>
+      </Card>
     </div>
   );
 }
