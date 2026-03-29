@@ -44,7 +44,7 @@ export async function GET(
   }
 
   const mimeType = report.eventImageMimeType ?? "image/jpeg";
-  const data = report.eventImageData;
+  const data = new Uint8Array(report.eventImageData);
 
   // ETag: lightweight hash of the first 64 bytes of the image so the browser can
   // use If-None-Match for efficient polling (304 Not Modified = no body transfer).

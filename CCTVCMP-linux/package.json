@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3002",
-    "build": "sh -c 'ORIG_DATABASE_URL=\"$DATABASE_URL\"; MIGRATE_DATABASE_URL=\"${DIRECT_URL:-$ORIG_DATABASE_URL}\"; DATABASE_URL=\"$MIGRATE_DATABASE_URL\" prisma migrate deploy && DATABASE_URL=\"$ORIG_DATABASE_URL\" next build'",
+    "build": "next build",
     "start": "next start -p 3002",
     "lint": "next lint",
     "test": "vitest run",
@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "sh -c 'ORIG_DATABASE_URL=\"$DATABASE_URL\"; MIGRATE_DATABASE_URL=\"${DIRECT_URL:-$ORIG_DATABASE_URL}\"; DATABASE_URL=\"$MIGRATE_DATABASE_URL\" prisma migrate deploy'",
     "prisma:seed": "tsx prisma/seed.ts",
     "bootstrap-admin": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs scripts/bootstrap-admin.ts",
     "seed-cameras": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs scripts/seed-cameras.ts",
