@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
+import { EdgeIntegrationHelp } from "@/components/settings/edge-integration-help";
 
 type AlarmRule = {
   id: string;
@@ -30,20 +31,29 @@ type Channel = {
 };
 
 export function SettingsTabs({ rules, channels }: { rules: AlarmRule[]; channels: Channel[] }) {
-  const [tab, setTab] = useState<"rules" | "channels">("rules");
+  const [tab, setTab] = useState<"rules" | "channels" | "edge">("rules");
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant={tab === "rules" ? "default" : "outline"} onClick={() => setTab("rules")}>
           Alarm Rules
         </Button>
         <Button variant={tab === "channels" ? "default" : "outline"} onClick={() => setTab("channels")}>
           Notification Channels
         </Button>
+        <Button variant={tab === "edge" ? "default" : "outline"} onClick={() => setTab("edge")}>
+          Edge connection (PPE-UI)
+        </Button>
       </div>
 
-      {tab === "rules" ? <AlarmRulesTab rules={rules} /> : <NotificationChannelsTab channels={channels} />}
+      {tab === "rules" ? (
+        <AlarmRulesTab rules={rules} />
+      ) : tab === "channels" ? (
+        <NotificationChannelsTab channels={channels} />
+      ) : (
+        <EdgeIntegrationHelp />
+      )}
     </div>
   );
 }

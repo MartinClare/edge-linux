@@ -130,6 +130,17 @@ OPENROUTER_API_KEY="sk-or-v1-..."
 ```bash
 npm install
 npx prisma migrate deploy
+```
+
+Create your first admin (after setting `CMP_BOOTSTRAP_EMAIL` and `CMP_BOOTSTRAP_PASSWORD` in `.env`):
+
+```bash
+npm run bootstrap-admin
+```
+
+Then:
+
+```bash
 npm run dev
 ```
 
@@ -236,9 +247,9 @@ Python backend (port 8000)
 Node.js cloud service (port 3001) — uses edge's own OPENROUTER_API_KEY
     ↓ Gemini Vision → structured JSON (people count, PPE, issues)
 Python alarm_observer._send_to_central_server()
-    ↓ POST https://cctvcmp.vercel.app/api/webhook/edge-report
+    ↓ POST https://<your-cmp-host>/api/webhook/edge-report
     ↓   Header: X-API-Key: <EDGE_API_KEY>
-CMP Webhook — saves EdgeReport, responds 202 immediately
+CMP Webhook — saves EdgeReport, responds 200 { success: true }
     ↓ background: LLM classifies issues into incident types
     ↓ Alarm engine evaluates rules, deduplicates, creates Incidents
 Incidents page — live results, auto-refreshes every 10 s
@@ -249,12 +260,14 @@ Incidents page — live results, auto-refreshes every 10 s
 ```json
 "centralServer": {
   "enabled": true,
-  "url": "https://cctvcmp.vercel.app/api/webhook/edge-report",
-  "apiKey": "axonedge852852"
+  "url": "https://<your-cmp-host>/api/webhook/edge-report",
+  "apiKey": "<same as CMP EDGE_API_KEY>"
 }
 ```
 
-`apiKey` here must match `EDGE_API_KEY` in Vercel.
+`apiKey` here must match `EDGE_API_KEY` on this CMP deployment.
+
+**Operator instructions:** see **`USER_MANUAL.md` §15** *Connecting edge devices (PPE-UI)*. In the CMP web app: **Settings** → **Edge connection (PPE-UI)** shows the exact webhook URL for the site you have open.
 
 ---
 

@@ -21,7 +21,8 @@
 11. [Settings](#11-settings)
 12. [Incident Types & Risk Levels Reference](#12-incident-types--risk-levels-reference)
 13. [Incident Workflow Reference](#13-incident-workflow-reference)
-14. [Frequently Asked Questions](#14-frequently-asked-questions)
+14. [Frequently Asked Questions](#14-frequently-asked-questions)  
+15. [Connecting edge devices (PPE-UI)](#15-connecting-edge-devices-ppe-ui)
 
 ---
 
@@ -277,13 +278,15 @@ The Reports page is the compliance and export hub. Use it to generate weekly and
 **Route:** `/settings`  
 **Access:** admin, project_manager only
 
-The Settings page provides access to system-level configuration including:
+The Settings page has three areas:
 
-- RBAC policy adjustments
-- Alert and notification preferences
-- Project-level default configurations
+| Tab | Purpose |
+|---|---|
+| **Alarm Rules** | Thresholds and behaviour for incident-type alarms |
+| **Notification Channels** | Where alerts are delivered (email, webhook, etc.) |
+| **Edge connection (PPE-UI)** | Instructions and the exact **CMP webhook URL** for this deployment, so field staff can configure on-site **PPE-UI** (AXON Vision edge) to post analysis here |
 
-> This section is currently a placeholder. Full configuration UI is planned for a future release.
+For full edge setup steps (PPE-UI + `app.config.json` + troubleshooting), see **§15** below.
 
 ---
 
@@ -356,8 +359,8 @@ A: The Settings page is only accessible to `admin` and `project_manager` roles. 
 **Q: I clicked "Mark as acknowledged" but nothing happened.**  
 A: Make sure you are signed in and your session has not expired. If the problem persists, refresh the page and try again.
 
-**Q: I signed up but cannot access Reports.**  
-A: Self-registered users are assigned the `viewer` role by default, which does not include Reports access. Ask your admin to change your role to `safety_officer`, `project_manager`, or `admin`.
+**Q: I cannot access Reports.**  
+A: Accounts with the `viewer` role cannot open Reports. Ask your admin to assign `safety_officer`, `project_manager`, or `admin`. (Self-registration is disabled; accounts are created by an administrator.)
 
 **Q: Can I skip the "acknowledged" step and resolve an incident directly?**  
 A: No. The workflow enforces `open → acknowledged → resolved` in order. This ensures accountability and accurate response time tracking.
@@ -372,7 +375,73 @@ A: It is pulled from the `daily_metrics` table which stores a pre-aggregated `av
 A: No. Sessions are authentication tokens only. All incident data and records are stored in the database and are unaffected by session expiry.
 
 **Q: How do I add a new project or camera?**  
-A: Projects and cameras are managed via the API. Use `POST /api/projects` to create a project and `POST /api/cameras` (when implemented) to add cameras. Admin or Project Manager role is required.
+A: **Projects** can be created via the API (`POST /api/projects`) with admin or project_manager role. **Cameras / edge devices** are usually **created automatically** when the edge first successfully POSTs to `/api/webhook/edge-report` with a new `edgeCameraId`. You can also pre-register via `POST /api/edge-devices` if your workflow requires it. See §15 for PPE-UI connection steps.
+
+**Q: Edge Devices is empty — what should I check on site?**  
+A: Confirm PPE-UI (or `app.config.json`) has CMP enabled, the webhook URL matches this CMP, and `apiKey` matches `EDGE_API_KEY`. Ensure the edge is sending (Deep Vision + RTSP + analysis). On Vercel, disable deployment protection for the webhook URL if POSTs return HTML instead of JSON.
+
+---
+
+## 15. Connecting edge devices (PPE-UI)
+
+Edge sites run the **AXON Vision edge-linux** stack: a **Python/FastAPI** service (RTSP, Deep Vision, CMP forwarding) and **PPE-UI** (browser UI). This CMP receives safety analysis on a single **webhook** endpoint. After the first successful delivery, each camera appears under **Edge Devices** (and on the dashboard).
+
+### Webhook URL
+
+Use your CMP’s public origin (same host as this site in the browser) with this path:
+
+```text
+https://<your-cmp-host>/api/webhook/edge-report
+```
+
+Example: if you open CMP at `https://my-cmp.vercel.app`, the webhook URL is:
+
+```text
+https://my-cmp.vercel.app/api/webhook/edge-report
+```
+
+> **In-app shortcut:** go to **Settings** → tab **Edge connection (PPE-UI)** — the page shows the exact URL for the deployment you are viewing.
+
+### API key (`EDGE_API_KEY`)
+
+Every request must include header **`X-API-Key`** with a secret shared by the edge and this CMP.
+
+1. In **Vercel** (or your host), set environment variable **`EDGE_API_KEY`** for this CMP project to a strong random string.
+2. On the edge, set the **same value** as **CMP API Key** in PPE-UI (or as `centralServer.apiKey` in config — see below).
+
+If the key does not match, the webhook returns **401** and **no edge device** is created.
+
+### Option A — PPE-UI Settings (recommended)
+
+1. On the edge appliance, open **PPE-UI** in a browser.
+2. Open **Settings** from the sidebar.
+3. Turn on **Enable CMP reporting**.
+4. **CMP Webhook URL:** paste the full webhook URL (see above).
+5. **CMP API Key:** paste the same value as **`EDGE_API_KEY`** on this CMP.
+6. Click **Save**.  
+   The edge API merges this into the **repository root** `app.config.json` under `centralServer` and refreshes the forwarding service without a full redeploy.
+
+### Option B — `app.config.json` on the edge (headless)
+
+The Python service reads **`app.config.json` at the edge-linux repository root** (not only copies under `python/`). Set:
+
+```json
+"centralServer": {
+  "enabled": true,
+  "url": "https://<your-cmp-host>/api/webhook/edge-report",
+  "apiKey": "<same as EDGE_API_KEY on CMP>"
+}
+```
+
+Restart or wait for the config refresh cycle if you edit the file while the API is running.
+
+### When data actually arrives
+
+- The edge sends a payload **after each successful Deep Vision analysis** (RTSP frame → cloud/Gemini analysis → CMP).  
+- You need at least one **enabled** RTSP camera in config, working **cloud** analysis, and **`ui.deepVisionEnabled`** not disabled in `app.config.json`.  
+- **Vercel Deployment Protection** (login wall) blocks machine `POST`s — use a **public** production URL for the webhook, or disable protection for that deployment.
+
+Technical payload and fields: **`WEBHOOK_API.md`** in the `CCTVCMP-linux` folder of the edge-linux repository.
 
 ---
 

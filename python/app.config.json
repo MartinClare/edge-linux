@@ -54,8 +54,8 @@
     "showAllFeatures": false
   },
   "centralServer": {
-    "enabled": false,
-    "url": "https://cctvcmp.vercel.app/api/webhook/edge-report",
+    "enabled": true,
+    "url": "https://cctvcmpchev-git-main-martinclares-projects.vercel.app/api/webhook/edge-report",
     "apiKey": "axonedge852852"
   },
   "network": {
