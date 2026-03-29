@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 222 47% 11%;
+  --foreground: 210 40% 98%;
+  --card: 224 71% 4%;
+  --card-foreground: 213 31% 91%;
+  --primary: 201 96% 32%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 215 28% 17%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 215 28% 17%;
+  --muted-foreground: 217 10% 64%;
+  --accent: 197 92% 47%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217 33% 20%;
+  --input: 217 33% 20%;
+  --ring: 197 92% 47%;
+  --radius: 0.7rem;
+}
+
+body {
+  @apply bg-background text-foreground;
+}
+
+/* Accessibility/readability: keep app fonts comfortably above 9pt (~12px). */
+@layer utilities {
+  .text-xs {
+    font-size: 0.8125rem !important; /* 13px */
+    line-height: 1.25rem !important;
+  }
+
+  .text-sm {
+    font-size: 0.9375rem !important; /* 15px */
+    line-height: 1.375rem !important;
+  }
+
+  .text-base {
+    font-size: 1rem !important; /* 16px */
+    line-height: 1.5rem !important;
+  }
+}

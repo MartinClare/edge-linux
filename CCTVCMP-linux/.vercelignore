@@ -1,0 +1,10 @@
+.env
+.env.*
+node_modules
+.git
+.agents
+tests
+*.test.ts
+*.test.tsx
+vitest.config.ts
+coverage
