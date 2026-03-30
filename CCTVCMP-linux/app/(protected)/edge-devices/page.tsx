@@ -16,6 +16,8 @@ export default async function EdgeDevicesPage() {
         take: 10,
         select: {
           id: true,
+          messageType: true,
+          keepalive: true,
           overallRiskLevel: true,
           overallDescription: true,
           eventImagePath: true,
@@ -33,47 +35,57 @@ export default async function EdgeDevicesPage() {
   ]);
 
   const now = Date.now();
-  const devices = cameras.map((cam) => {
-    const latestReport = cam.edgeReports[0] ?? null;
-    const latestAlertEvidence =
-      cam.edgeReports.find(
-        (r) =>
-          (r.overallRiskLevel === "Medium" || r.overallRiskLevel === "High" || r.overallRiskLevel === "Critical") &&
-          !!r.eventImagePath
-      ) ?? null;
+  const devices = cameras
+    .filter((cam) => {
+      // Hide probe-only / heartbeat-only pseudo devices from the list.
+      // Real CCTV devices either publish a stream URL or have at least one
+      // non-keepalive analysis report.
+      const hasAnalysisReport = cam.edgeReports.some(
+        (r) => !r.keepalive && r.messageType !== "keepalive"
+      );
+      return Boolean(cam.streamUrl) || hasAnalysisReport;
+    })
+    .map((cam) => {
+      const latestReport = cam.edgeReports[0] ?? null;
+      const latestAlertEvidence =
+        cam.edgeReports.find(
+          (r) =>
+            (r.overallRiskLevel === "Medium" || r.overallRiskLevel === "High" || r.overallRiskLevel === "Critical") &&
+            !!r.eventImagePath
+        ) ?? null;
 
-    return {
-      id: cam.id,
-      name: cam.name,
-      edgeCameraId: cam.edgeCameraId,
-      streamUrl: cam.streamUrl,
-      status: cam.status,
-      lastReportAt: cam.lastReportAt?.toISOString() ?? null,
-      createdAt: cam.createdAt.toISOString(),
-      project: cam.project,
-      zone: cam.zone,
-      isOnline:
-        cam.status !== "maintenance" &&
-        cam.lastReportAt != null &&
-        now - cam.lastReportAt.getTime() < ONLINE_THRESHOLD_MS,
-      latestReport: latestReport
-        ? {
-            ...latestReport,
-            receivedAt: latestReport.receivedAt.toISOString(),
-          }
-        : null,
-      latestAlertEvidence: latestAlertEvidence
-        ? {
-            id: latestAlertEvidence.id,
-            overallRiskLevel: latestAlertEvidence.overallRiskLevel,
-            eventImagePath: latestAlertEvidence.eventImagePath!,
-            receivedAt: latestAlertEvidence.receivedAt.toISOString(),
-          }
-        : null,
-      incidentCount: cam._count.incidents,
-      reportCount: cam._count.edgeReports,
-    };
-  });
+      return {
+        id: cam.id,
+        name: cam.name,
+        edgeCameraId: cam.edgeCameraId,
+        streamUrl: cam.streamUrl,
+        status: cam.status,
+        lastReportAt: cam.lastReportAt?.toISOString() ?? null,
+        createdAt: cam.createdAt.toISOString(),
+        project: cam.project,
+        zone: cam.zone,
+        isOnline:
+          cam.status !== "maintenance" &&
+          cam.lastReportAt != null &&
+          now - cam.lastReportAt.getTime() < ONLINE_THRESHOLD_MS,
+        latestReport: latestReport
+          ? {
+              ...latestReport,
+              receivedAt: latestReport.receivedAt.toISOString(),
+            }
+          : null,
+        latestAlertEvidence: latestAlertEvidence
+          ? {
+              id: latestAlertEvidence.id,
+              overallRiskLevel: latestAlertEvidence.overallRiskLevel,
+              eventImagePath: latestAlertEvidence.eventImagePath!,
+              receivedAt: latestAlertEvidence.receivedAt.toISOString(),
+            }
+          : null,
+        incidentCount: cam._count.incidents,
+        reportCount: cam._count.edgeReports,
+      };
+    });
 
   const onlineCount = devices.filter((d) => d.isOnline).length;
 
