@@ -56,6 +56,10 @@ const PERSON_LABELS = new Set([
   "no_hardhat_no_vest",
 ]);
 
+const NON_VIOLATION_LABELS = new Set([
+  "person_ok",
+]);
+
 function tightenBoxForDisplay(det: Detection, bbox: [number, number, number, number]): [number, number, number, number] {
   let [yMin, xMin, yMax, xMax] = bbox;
 
@@ -71,6 +75,25 @@ function tightenBoxForDisplay(det: Detection, bbox: [number, number, number, num
   }
 
   return [yMin, xMin, yMax, xMax];
+}
+
+function normalizeBBox(det: Detection): [number, number, number, number] {
+  let [yMin, xMin, yMax, xMax] = det.bbox;
+
+  // Auto-detect if the model returned 0–1 instead of 0–1000 and scale up.
+  const maxVal = Math.max(yMin, xMin, yMax, xMax);
+  const scale = maxVal <= 1.5 ? 1000 : 1;
+  yMin *= scale; xMin *= scale; yMax *= scale; xMax *= scale;
+
+  const clamp = (v: number) => Math.max(0, Math.min(1000, v));
+  [yMin, xMin, yMax, xMax] = [clamp(yMin), clamp(xMin), clamp(yMax), clamp(xMax)];
+
+  return tightenBoxForDisplay(det, [yMin, xMin, yMax, xMax]);
+}
+
+function shouldRenderDetection(det: Detection, bbox: [number, number, number, number]): boolean {
+  if (NON_VIOLATION_LABELS.has(det.label)) return false;
+  return true;
 }
 
 function drawBoxes(
@@ -121,17 +144,7 @@ function drawBoxes(
   // ─────────────────────────────────────────────────────────────────────────
 
   for (const det of detections) {
-    let [yMin, xMin, yMax, xMax] = det.bbox;
-
-    // Auto-detect if the model returned 0–1 instead of 0–1000 and scale up
-    const maxVal = Math.max(yMin, xMin, yMax, xMax);
-    const scale = maxVal <= 1.5 ? 1000 : 1;
-    yMin *= scale; xMin *= scale; yMax *= scale; xMax *= scale;
-
-    // Clamp to valid range
-    const clamp = (v: number) => Math.max(0, Math.min(1000, v));
-    [yMin, xMin, yMax, xMax] = [clamp(yMin), clamp(xMin), clamp(yMax), clamp(xMax)];
-    [yMin, xMin, yMax, xMax] = tightenBoxForDisplay(det, [yMin, xMin, yMax, xMax]);
+    const [yMin, xMin, yMax, xMax] = normalizeBBox(det);
 
     // Map 0-1000 normalised coords into the content area
     const x1 = offsetX + (xMin / 1000) * contentW;
@@ -201,11 +214,12 @@ export function BoundingBoxCanvas({ imageUrl, detections, className = "" }: Prop
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const visibleDetections = detections.filter((det) => shouldRenderDetection(det, normalizeBBox(det)));
 
   const redraw = useCallback(() => {
     if (!canvasRef.current || !imgRef.current || !imgLoaded) return;
-    drawBoxes(canvasRef.current, imgRef.current, detections);
-  }, [detections, imgLoaded]);
+    drawBoxes(canvasRef.current, imgRef.current, visibleDetections);
+  }, [visibleDetections, imgLoaded]);
 
   // Redraw whenever detections or image change; brief rAF delay so the browser
   // has committed layout (offsetWidth/Height) before we sample dimensions.
@@ -245,9 +259,9 @@ export function BoundingBoxCanvas({ imageUrl, detections, className = "" }: Prop
           style={{ top: 0, left: 0 }}
         />
       </div>
-      {detections.length > 0 && (
+      {visibleDetections.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
-          {Array.from(new Set(detections.map((d) => d.label))).map((label) => (
+          {Array.from(new Set(visibleDetections.map((d) => d.label))).map((label) => (
             <span
               key={label}
               className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-white"

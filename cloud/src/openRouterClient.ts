@@ -228,12 +228,15 @@ Return your output STRICTLY as valid JSON with this exact structure (no markdown
 }
 
 **BOUNDING BOX INSTRUCTIONS:**
-- Only add a PPE/person detection entry when PPE is CLEARLY VERIFIABLE for that person.
-- If PPE is unclear, distant, blurred, blocked, or inside a cab, add NO person_ok / PPE bbox for that person.
-- For each clearly verifiable person, label is "person_ok", "no_hardhat", "no_vest", or "no_hardhat_no_vest".
+- Only add a PPE/person detection entry when there is an ACTUAL PPE VIOLATION.
+- Do NOT emit `person_ok` boxes. If PPE is fine, keep silent and add no person bbox.
+- If PPE is unclear, distant, blurred, blocked, or inside a cab, add NO PPE/person bbox for that person.
+- For each clearly verifiable violation, label is "no_hardhat", "no_vest", or "no_hardhat_no_vest".
 - Person/PPE boxes must be TIGHT around the actual worker only: from the visible top of the head/helmet to the feet or lowest visible body part, and from the left-most to right-most visible body edges.
 - Do NOT include nearby machinery, poles, barriers, shadows, or empty surrounding space in a person/PPE box.
+- If a worker is tiny, far away, or the resulting box would be very small/loose on a wide view, omit the bbox entirely.
 - For EACH hazard found in STEP 4 add one entry: label is "fire_smoke", "smoking", "machine_proximity", "working_at_height", "person_fallen", or "safety_hazard".
+- Hazard boxes must also be tight and specific. Do NOT draw a huge box covering a broad area when you cannot isolate the actual hazard location.
 - "bbox" must be [y_min, x_min, y_max, x_max] with integer values 0–1000 (normalized image coordinates).
 - Always include a brief "description" — especially for "safety_hazard" (explain what hazard was found).
 - If nothing is visible, set "detections" to [].
@@ -379,16 +382,19 @@ Return STRICT JSON (no markdown):
 }
 
 **BOUNDING BOX INSTRUCTIONS:**
-- Only add a PPE/person detection entry when PPE is CLEARLY VERIFIABLE for that person.
-- If PPE is unclear, distant, blurred, blocked, or inside a cab, add NO person_ok / PPE bbox for that person.
-- For each clearly verifiable person: label is "person_ok", "no_hardhat", "no_vest", or "no_hardhat_no_vest".
+- Only add a PPE/person detection entry when there is an ACTUAL PPE VIOLATION.
+- Do NOT emit `person_ok` boxes. If PPE is fine, keep silent and add no person bbox.
+- If PPE is unclear, distant, blurred, blocked, or inside a cab, add NO PPE/person bbox for that person.
+- For each clearly verifiable violation: label is "no_hardhat", "no_vest", or "no_hardhat_no_vest".
 - Person/PPE boxes must be TIGHT around the actual worker only: from the visible top of the head/helmet to the feet or lowest visible body part, and from the left-most to right-most visible body edges.
 - Do NOT include nearby machinery, poles, barriers, shadows, or empty surrounding space in a person/PPE box.
+- If a worker is tiny, far away, or the resulting box would be very small/loose on a wide view, omit the bbox entirely.
 - For fire/smoke area: label "fire_smoke". For a person smoking: label "smoking".
 - For machine too close to person: label "machine_proximity" (box around both).
 - For unsafe height work: label "working_at_height" (box around the worker).
 - For fallen person: label "person_fallen" (box around them).
 - For any other hazard: label "safety_hazard" with description explaining the risk.
+- Hazard boxes must also be tight and specific. Do NOT draw a huge box covering a broad area when you cannot isolate the actual hazard location.
 - bbox: [y_min, x_min, y_max, x_max] integers 0–1000.
 - If nothing found, set "detections" to [].
 
