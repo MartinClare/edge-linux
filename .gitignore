@@ -1,3 +1,7 @@
+# Binaries
+/go2rtc
+/go2rtc.yaml
+
 # Python
 venv/
 __pycache__/

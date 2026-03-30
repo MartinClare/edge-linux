@@ -40,67 +40,27 @@ function withTimestamp(url: string): string {
   return `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
 }
 
-/**
- * Snapshot thumbnail with graceful caching:
- *  - A hidden <img> preloads the latest frame in the background.
- *  - The visible image only swaps when the new frame is fully loaded.
- *  - On error (or 204 = no image yet) the old image (or placeholder) stays visible.
- *  - Auto-refreshes every 30 s so cards stay current without a page reload.
- */
+/** Snapshot thumbnail that always fetches the latest frame directly. */
 function DeviceSnapshot({ deviceId, name }: { deviceId: string; name: string }) {
   const base = `/api/edge-devices/${deviceId}/snapshot`;
+  const [src, setSrc] = useState(() => withTimestamp(base));
 
-  // pendingSrc: what we're currently trying to load (bumped every 30 s)
-  const [pendingSrc, setPendingSrc] = useState(() => withTimestamp(base));
-  // displaySrc: last successfully loaded image — never cleared on error
-  const [displaySrc, setDisplaySrc] = useState<string | null>(null);
-
-  // Refresh immediately on mount / device change, then poll.
   useEffect(() => {
-    setPendingSrc(withTimestamp(base));
-    const id = setInterval(
-      () => setPendingSrc(withTimestamp(base)),
-      SNAPSHOT_REFRESH_MS
-    );
+    setSrc(withTimestamp(base));
+    const id = setInterval(() => setSrc(withTimestamp(base)), SNAPSHOT_REFRESH_MS);
     return () => clearInterval(id);
   }, [base]);
 
   return (
     <>
-      {/* Hidden preloader — fetches new frame; swaps display only on success */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        key={pendingSrc}
-        src={pendingSrc}
-        alt=""
-        aria-hidden
-        className="hidden"
-        onLoad={() => setDisplaySrc(pendingSrc)}
-        // On error: do nothing — displaySrc (old image or null) stays unchanged
+        key={src}
+        src={src}
+        alt={`${name} snapshot`}
+        className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
       />
-
-      {displaySrc ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={displaySrc}
-          alt={`${name} snapshot`}
-          className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-        />
-      ) : (
-        <SnapshotPlaceholder />
-      )}
     </>
-  );
-}
-
-function SnapshotPlaceholder() {
-  return (
-    <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-muted-foreground/40">
-      <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-      </svg>
-      <span className="text-xs">No snapshot yet</span>
-    </div>
   );
 }
 

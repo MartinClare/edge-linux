@@ -16,6 +16,7 @@
         "id": "camera1",
         "name": "site_b_02",
         "url": "rtsp://fnnas.cccl4s.com:8554/site_b_02",
+        "browserUrl": "http://fnnas.cccl4s.com:8554/site_b_02",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
@@ -24,6 +25,7 @@
         "id": "camera2",
         "name": "site_b_08",
         "url": "rtsp://fnnas.cccl4s.com:8554/site_b_08",
+        "browserUrl": "http://fnnas.cccl4s.com:8554/site_b_08",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
@@ -32,6 +34,7 @@
         "id": "camera3",
         "name": "site_b_09",
         "url": "rtsp://fnnas.cccl4s.com:8554/site_b_09",
+        "browserUrl": "http://fnnas.cccl4s.com:8554/site_b_09",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
@@ -40,13 +43,14 @@
         "id": "camera4",
         "name": "site_b_11",
         "url": "rtsp://fnnas.cccl4s.com:8554/site_b_11",
+        "browserUrl": "http://fnnas.cccl4s.com:8554/site_b_11",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
       }
     ],
     "fpsLimit": 15,
-    "geminiInterval": 5,
+    "geminiInterval": 300,
     "autoStart": true
   },
   "debug": {

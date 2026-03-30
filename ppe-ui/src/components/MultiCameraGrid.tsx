@@ -3,12 +3,13 @@ import RTSPLiveStream from './RTSPLiveStream';
 import GeminiPpeNarrative from './GeminiPpeNarrative';
 import SettingsModal from './SettingsModal';
 import type { AnalysisMode, GeminiAnalysisResult, AlertAnalysisResult } from '../types/detection.types';
-import { YOLO_API_URL } from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 interface CameraConfig {
   id: string;
   name: string;
   url: string;
+  browserUrl?: string;
   enabled: boolean;
   tailscaleUrl?: string;
   useTailscale?: boolean;
@@ -88,10 +89,6 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
     alert: AlertAnalysisResult | null;
   }>>({});
 
-  // Debug: Log when cameraResults changes
-  useEffect(() => {
-    console.log('[MultiCamera] 📊 cameraResults state updated:', cameraResults);
-  }, [cameraResults]);
 
   // Rotate to next enabled camera for Deep Vision analysis
   useEffect(() => {
@@ -178,10 +175,10 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
   useEffect(() => {
     let cancelled = false;
     setConfigLoadError(null);
-    fetch(`${YOLO_API_URL}/api/config`)
+    fetch(`${API_BASE_URL}/api/config`)
       .then(res => {
         if (!res.ok) {
-          throw new Error(`Backend returned ${res.status} — is the edge API running at ${YOLO_API_URL}?`);
+          throw new Error(`Backend returned ${res.status} — is the edge API running at ${API_BASE_URL}?`);
         }
         return res.json();
       })
@@ -212,7 +209,7 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
 
     const refreshBackendResults = async () => {
       try {
-        const res = await fetch(`${YOLO_API_URL}/api/deepvision/latest`);
+        const res = await fetch(`${API_BASE_URL}/api/deepvision/latest`);
         if (!res.ok) return;
         const data = await res.json();
         const results: BackendDeepVisionResult[] = Array.isArray(data?.results) ? data.results : [];
@@ -330,18 +327,6 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
     const geminiResult = cameraResult?.gemini;
     const alertResult = cameraResult?.alert;
     
-    console.log(`[MultiCamera] 🎨 Rendering ${camera.id}:`, { 
-      hasCameraResult: !!cameraResult, 
-      hasGeminiResult: !!geminiResult, 
-      hasAlertResult: !!alertResult,
-      analysisMode,
-      willShowResults: (analysisMode === 'gemini' || analysisMode === 'alerts') && (geminiResult || alertResult),
-      geminiResultData: geminiResult ? {
-        risk: geminiResult.overallRiskLevel,
-        description: geminiResult.overallDescription?.substring(0, 50)
-      } : null
-    });
-    
     // Only render stream if camera is enabled
     if (!effectiveEnabled) {
       return (
@@ -414,21 +399,21 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
           cameraId={camera.id}
           cameraName={getEffectiveName(camera)}
           rtspUrl={effectiveUrl}
+          browserUrl={camera.browserUrl || ''}
           fpsLimit={fpsLimit}
           geminiInterval={geminiInterval}
           autoStart={autoStart}
           autoStartDelay={index * 500}
-          analysisMode={analysisMode}
+          analysisMode="none"
           allowAnalysis={false}
           compact={!singleView && enabledCameras.length > 1}
           onGeminiResult={(result) => handleGeminiResult(camera.id, result)}
           onAlertResult={(result) => handleAlertResult(camera.id, result)}
         />
         
-        {/* Full Detailed Results Display */}
+        {/* Full Detailed Results Display — always shown when results exist */}
         {(() => {
-          const shouldShow = (analysisMode === 'gemini' || analysisMode === 'alerts') && (geminiResult || alertResult);
-          console.log(`[MultiCamera] 📋 Results display for ${camera.id}:`, { shouldShow, analysisMode, hasGemini: !!geminiResult, hasAlert: !!alertResult });
+          const shouldShow = !!(geminiResult || alertResult);
           return shouldShow ? (
           <div style={{
             marginTop: '0.75rem',

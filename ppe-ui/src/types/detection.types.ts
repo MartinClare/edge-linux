@@ -136,7 +136,7 @@ export interface AlertAnalysisResult {
 
 // Input Source Types
 export type InputSource = 'image' | 'video' | 'webcam' | 'rtsp';
-export type AnalysisMode = 'yolo' | 'gemini' | 'alerts';
+export type AnalysisMode = 'yolo' | 'gemini' | 'alerts' | 'none';
 
 // API Response Types
 export interface ApiResponse<T> {

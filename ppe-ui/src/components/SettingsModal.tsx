@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { YOLO_API_URL } from '../config/api';
+import { API_BASE_URL } from '../config/api';
 
 interface CameraConfig {
   id: string;
   name: string;
   url: string;
+  browserUrl?: string;
   enabled: boolean;
   tailscaleUrl?: string;
   useTailscale?: boolean;
@@ -61,6 +62,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onSave
 }) => {
   const [cameraUrls, setCameraUrls] = useState<Record<string, string>>({});
+  const [cameraBrowserUrls, setCameraBrowserUrls] = useState<Record<string, string>>({});
   const [cameraTailscaleUrls, setCameraTailscaleUrls] = useState<Record<string, string>>({});
   const [cameraUseTailscale, setCameraUseTailscale] = useState<Record<string, boolean>>({});
   const [cameraNames, setCameraNames] = useState<Record<string, string>>({});
@@ -87,7 +89,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const fetchServiceStatus = useCallback(async () => {
     setServiceStatusLoading(true);
     try {
-      const res = await fetch(`${YOLO_API_URL}/api/services/status`);
+      const res = await fetch(`${API_BASE_URL}/api/services/status`);
       if (res.ok) {
         const data = await res.json();
         setServiceStatus(data);
@@ -179,14 +181,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       },
     };
 
-    // Sync to root app.config.json via Python backend first.
-    const baseUrl = YOLO_API_URL;
+    // Sync to root app.config.json via edge-cloud service.
+    const baseUrl = API_BASE_URL;
     const rtspPayload = {
       rtsp: {
         cameras: cameras.map((c) => ({
           id: c.id,
           name: cameraNames[c.id] ?? c.name,
           url: cameraUrls[c.id] ?? c.url,
+          browserUrl: cameraBrowserUrls[c.id] ?? c.browserUrl ?? '',
           enabled: cameraEnabled[c.id] !== undefined ? cameraEnabled[c.id] : c.enabled,
           tailscaleUrl: cameraTailscaleUrls[c.id] ?? c.tailscaleUrl ?? '',
           useTailscale: cameraUseTailscale[c.id] !== undefined ? cameraUseTailscale[c.id] : !!c.useTailscale,
@@ -289,7 +292,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         username: scanUsername,
         password: scanPassword,
       });
-      const res = await fetch(`${YOLO_API_URL}/api/scan-cameras?${params}`, { method: 'POST' });
+      const res = await fetch(`${API_BASE_URL}/api/scan-cameras?${params}`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) {
         setScanError(data?.detail || `Scan failed (${res.status})`);
@@ -956,9 +959,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       )}
                     </div>
 
-                    {/* RTSP URL */}
+                    {/* RTSP URL (for backend analysis) */}
                     <label style={{ display: 'block', marginBottom: '0.3rem', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>
-                      Direct RTSP URL (LAN/eth2)
+                      RTSP URL (backend analysis)
                     </label>
                     <input
                       type="text"
@@ -973,6 +976,35 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         border: '1px solid rgba(0, 217, 255, 0.3)',
                         background: effectiveEnabled ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.2)',
                         color: urlEdited ? '#4caf50' : '#fff',
+                        fontSize: '0.85rem',
+                        fontFamily: 'monospace',
+                        marginBottom: '0.5rem',
+                        opacity: effectiveEnabled ? 1 : 0.5,
+                        cursor: effectiveEnabled ? 'text' : 'not-allowed',
+                        boxSizing: 'border-box'
+                      }}
+                    />
+
+                    {/* Browser MJPEG URL (for live display) */}
+                    <label style={{ display: 'block', marginBottom: '0.3rem', color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>
+                      Browser Stream URL (MJPEG for live display)
+                    </label>
+                    <input
+                      type="text"
+                      value={cameraBrowserUrls[camera.id] ?? camera.browserUrl ?? ''}
+                      onChange={(e) => {
+                        setCameraBrowserUrls(prev => ({ ...prev, [camera.id]: e.target.value }));
+                        setHasChanges(true);
+                      }}
+                      placeholder="http://camera-host:8554/stream_name"
+                      disabled={!effectiveEnabled}
+                      style={{
+                        width: '100%',
+                        padding: '0.5rem',
+                        borderRadius: '4px',
+                        border: '1px solid rgba(0, 217, 255, 0.3)',
+                        background: effectiveEnabled ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.2)',
+                        color: (cameraBrowserUrls[camera.id] !== undefined) ? '#4caf50' : '#fff',
                         fontSize: '0.85rem',
                         fontFamily: 'monospace',
                         marginBottom: '0.5rem',

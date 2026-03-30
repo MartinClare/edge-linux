@@ -46,23 +46,13 @@ export async function GET(
   const mimeType = report.eventImageMimeType ?? "image/jpeg";
   const data = new Uint8Array(report.eventImageData);
 
-  // ETag: lightweight hash of the first 64 bytes of the image so the browser can
-  // use If-None-Match for efficient polling (304 Not Modified = no body transfer).
-  const etag = `"${Buffer.from(data.slice(0, 64)).toString("base64").replace(/[+/=]/g, "").slice(0, 24)}"`;
-
-  if (request.headers.get("if-none-match") === etag) {
-    return new NextResponse(null, { status: 304 });
-  }
-
   return new NextResponse(data, {
     status: 200,
     headers: {
       "Content-Type": mimeType,
-      "ETag": etag,
-      // no-cache: browser must revalidate every time (can still use ETag / 304).
-      // The client component already adds ?t= timestamps so ETag hits are rare,
-      // but this ensures CDNs / proxies never serve a stale snapshot.
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-store, max-age=0",
+      "Pragma": "no-cache",
+      "Expires": "0",
     },
   });
 }
