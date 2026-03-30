@@ -94,18 +94,6 @@ function drawBoxes(
     offsetY = 0;
   }
 
-  // Debug logging (remove in production)
-  console.log("[BoundingBox] Canvas:", W, "x", H, "| Natural:", nw, "x", nh,
-    "| Content:", contentW.toFixed(1), "x", contentH.toFixed(1),
-    "| Offset:", offsetX.toFixed(1), ",", offsetY.toFixed(1),
-    "| Aspect:", naturalAspect.toFixed(3), "vs", elementAspect.toFixed(3));
-
-  // Debug: draw content area border (yellow) to verify letterbox calculation
-  ctx.strokeStyle = "#ffff00";
-  ctx.lineWidth = 1;
-  ctx.setLineDash([5, 5]);
-  ctx.strokeRect(offsetX, offsetY, contentW, contentH);
-  ctx.setLineDash([]);
   // ─────────────────────────────────────────────────────────────────────────
 
   for (const det of detections) {
@@ -127,12 +115,6 @@ function drawBoxes(
     const y2 = offsetY + (yMax / 1000) * contentH;
     const bw = x2 - x1;
     const bh = y2 - y1;
-
-    // Debug first detection only
-    if (det === detections[0]) {
-      console.log("[BoundingBox] First box - Raw:", det.bbox, "| Scaled:", [yMin, xMin, yMax, xMax].map(v=>v.toFixed(1)),
-        "| Canvas:", {x1: x1.toFixed(1), y1: y1.toFixed(1), w: bw.toFixed(1), h: bh.toFixed(1)});
-    }
 
     const color = BOX_COLORS[det.label] ?? "#a855f7";
     const label = LABEL_TEXT[det.label] ?? det.label;
@@ -218,24 +200,26 @@ export function BoundingBoxCanvas({ imageUrl, detections, className = "" }: Prop
   }, [redraw]);
 
   return (
-    <div className={`relative inline-block w-full ${className}`}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        ref={imgRef}
-        src={imageUrl}
-        alt="Evidence"
-        className="block w-full rounded border"
-        style={{ objectFit: "contain" }}
-        onLoad={() => setImgLoaded(true)}
-      />
-      {/* Canvas sits directly on top of the image, pointer-events:none so the
-          image can still be clicked/opened */}
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 pointer-events-none"
-        style={{ top: 0, left: 0 }}
-      />
-      {/* Legend */}
+    <div className={`w-full ${className}`}>
+      <div className="relative inline-block w-full">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          ref={imgRef}
+          src={imageUrl}
+          alt="Evidence"
+          className="block w-full rounded border"
+          style={{ objectFit: "contain" }}
+          onLoad={() => setImgLoaded(true)}
+        />
+        {/* Canvas must be positioned against the image-only wrapper.
+            If it spans the legend too, the browser stretches the canvas
+            vertically and the boxes drift away from the object. */}
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 pointer-events-none"
+          style={{ top: 0, left: 0 }}
+        />
+      </div>
       {detections.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
           {Array.from(new Set(detections.map((d) => d.label))).map((label) => (
