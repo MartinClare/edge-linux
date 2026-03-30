@@ -194,9 +194,6 @@ function ReportCard({ report }: { report: Report }) {
                     🦺 {report.missingVests} missing vest{report.missingVests > 1 ? "s" : ""}
                   </span>
                 )}
-                {(report.missingHardhats === 0 && report.missingVests === 0 && (report.peopleCount ?? 0) > 0) && (
-                  <span className="text-green-400">✓ PPE compliant</span>
-                )}
               </div>
             )}
 

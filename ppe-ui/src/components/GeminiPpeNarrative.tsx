@@ -31,11 +31,6 @@ const GeminiPpeNarrative: React.FC<GeminiPpeNarrativeProps> = ({
       'PPE concern: people were detected missing safety vests or not wearing required high-visibility vests.'
     );
   }
-  if (mh !== undefined && mv !== undefined && mh === 0 && mv === 0) {
-    lines.push(
-      'No missing-hardhat or missing-safety-vest issues were flagged in this analysis.'
-    );
-  }
 
   if (lines.length === 0) return null;
 
