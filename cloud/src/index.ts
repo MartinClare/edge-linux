@@ -92,15 +92,15 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
   });
 });
 
-// Graceful shutdown: kill ffmpeg/go2rtc children before exiting
+// Graceful shutdown: kill ffmpeg/go2rtc children before exiting.
+// stopBackgroundLoops() is async — it waits for all ffmpeg processes to die
+// before resolving, preventing orphaned children from blocking systemd.
 process.on('SIGTERM', () => {
   console.log('[server] SIGTERM received — stopping background loops');
-  stopBackgroundLoops();
-  process.exit(0);
+  stopBackgroundLoops().then(() => process.exit(0));
 });
 process.on('SIGINT', () => {
-  stopBackgroundLoops();
-  process.exit(0);
+  stopBackgroundLoops().then(() => process.exit(0));
 });
 
 // Start server

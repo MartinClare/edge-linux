@@ -11,6 +11,14 @@ interface CameraConfig {
   useTailscale?: boolean;
 }
 
+interface Schedule {
+  enabled: boolean;
+  dayStart: string;
+  dayEnd: string;
+  dayInterval: number;
+  nightInterval: number;
+}
+
 interface AppSettings {
   cameraUrls: Record<string, string>;
   cameraTailscaleUrls: Record<string, string>;
@@ -19,6 +27,7 @@ interface AppSettings {
   cameraEnabled: Record<string, boolean>;
   fpsLimit: number;
   geminiInterval: number;
+  schedule: Schedule;
   autoStart: boolean;
   deepVisionEnabled: boolean;
   centralServer: {
@@ -36,6 +45,7 @@ interface SettingsModalProps {
   cameras: CameraConfig[];
   configFpsLimit: number;
   configGeminiInterval: number;
+  configSchedule: Schedule;
   configAutoStart: boolean;
   configDeepVisionEnabled: boolean;
   configCmpEnabled: boolean;
@@ -47,10 +57,19 @@ interface SettingsModalProps {
   onSave: (settings: AppSettings) => void;
 }
 
+const DEFAULT_SCHEDULE: Schedule = {
+  enabled: false,
+  dayStart: '07:00',
+  dayEnd: '19:00',
+  dayInterval: 60,
+  nightInterval: 600,
+};
+
 const SettingsModal: React.FC<SettingsModalProps> = ({
   cameras,
   configFpsLimit,
   configGeminiInterval,
+  configSchedule,
   configAutoStart,
   configDeepVisionEnabled,
   configCmpEnabled,
@@ -69,6 +88,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [cameraEnabled, setCameraEnabled] = useState<Record<string, boolean>>({});
   const [fpsLimit, setFpsLimit] = useState(configFpsLimit);
   const [geminiInterval, setGeminiInterval] = useState(configGeminiInterval);
+  const [schedule, setSchedule] = useState<Schedule>({ ...DEFAULT_SCHEDULE, ...configSchedule });
   const [autoStart, setAutoStart] = useState(configAutoStart);
   const [deepVisionEnabled, setDeepVisionEnabled] = useState(configDeepVisionEnabled);
   const [cmpEnabled, setCmpEnabled] = useState(configCmpEnabled);
@@ -168,6 +188,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       cameraEnabled,
       fpsLimit,
       geminiInterval,
+      schedule,
       autoStart,
       deepVisionEnabled,
       centralServer: {
@@ -196,6 +217,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         })),
         fpsLimit,
         geminiInterval,
+        schedule,
         autoStart,
       },
       ui: {
@@ -238,6 +260,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setCameraEnabled({});
       setFpsLimit(configFpsLimit);
       setGeminiInterval(configGeminiInterval);
+      setSchedule({ ...DEFAULT_SCHEDULE, ...configSchedule });
       setAutoStart(configAutoStart);
       setDeepVisionEnabled(configDeepVisionEnabled);
       setCmpEnabled(configCmpEnabled);
@@ -475,16 +498,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 </small>
               </div>
 
-              {/* Gemini Interval */}
-              <div>
+              {/* Gemini Interval — used when schedule is off */}
+              <div style={{ opacity: schedule.enabled ? 0.45 : 1, transition: 'opacity 0.2s' }}>
                 <label style={{ display: 'block', marginBottom: '0.5rem', color: 'rgba(255,255,255,0.9)', fontSize: '0.9rem' }}>
                   Deep Vision Interval (seconds)
+                  {schedule.enabled && (
+                    <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)' }}>
+                      — overridden by schedule below
+                    </span>
+                  )}
                 </label>
                 <input
                   type="number"
                   min="1"
-                  max="60"
+                  max="3600"
                   value={geminiInterval}
+                  disabled={schedule.enabled}
                   onChange={(e) => {
                     setGeminiInterval(Number(e.target.value));
                     setHasChanges(true);
@@ -496,12 +525,149 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     border: '1px solid rgba(0, 217, 255, 0.3)',
                     background: 'rgba(0, 0, 0, 0.3)',
                     color: '#fff',
-                    fontSize: '0.9rem'
+                    fontSize: '0.9rem',
+                    cursor: schedule.enabled ? 'not-allowed' : 'text',
                   }}
                 />
                 <small style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  How often to run AI analysis (1-60 seconds)
+                  Fallback interval when day/night schedule is disabled
                 </small>
+              </div>
+
+              {/* Day / Night Schedule */}
+              <div style={{
+                padding: '1rem',
+                borderRadius: '8px',
+                border: schedule.enabled
+                  ? '1px solid rgba(255, 200, 0, 0.4)'
+                  : '1px solid rgba(255,255,255,0.1)',
+                background: schedule.enabled
+                  ? 'rgba(255, 200, 0, 0.05)'
+                  : 'rgba(0,0,0,0.15)',
+                transition: 'border-color 0.2s, background 0.2s',
+              }}>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  color: 'rgba(255,255,255,0.95)',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  marginBottom: schedule.enabled ? '1rem' : 0,
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={schedule.enabled}
+                    onChange={(e) => {
+                      setSchedule(s => ({ ...s, enabled: e.target.checked }));
+                      setHasChanges(true);
+                    }}
+                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                  />
+                  🌓 Day / Night Schedule
+                  <span style={{ fontSize: '0.75rem', fontWeight: 400, color: schedule.enabled ? '#ffd54f' : 'rgba(255,255,255,0.4)' }}>
+                    {schedule.enabled ? 'enabled' : 'disabled'}
+                  </span>
+                </label>
+
+                {schedule.enabled && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                    <small style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.8rem', marginTop: '-0.25rem' }}>
+                      During daytime hours the shorter interval runs; outside those hours the night interval applies.
+                    </small>
+
+                    {/* Day window */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '0.3rem', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>
+                          🌅 Day starts
+                        </label>
+                        <input
+                          type="time"
+                          value={schedule.dayStart}
+                          onChange={(e) => {
+                            setSchedule(s => ({ ...s, dayStart: e.target.value }));
+                            setHasChanges(true);
+                          }}
+                          style={{
+                            width: '100%', padding: '0.45rem', borderRadius: '4px',
+                            border: '1px solid rgba(255,200,0,0.35)',
+                            background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: '0.9rem',
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '0.3rem', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>
+                          🌇 Day ends
+                        </label>
+                        <input
+                          type="time"
+                          value={schedule.dayEnd}
+                          onChange={(e) => {
+                            setSchedule(s => ({ ...s, dayEnd: e.target.value }));
+                            setHasChanges(true);
+                          }}
+                          style={{
+                            width: '100%', padding: '0.45rem', borderRadius: '4px',
+                            border: '1px solid rgba(255,200,0,0.35)',
+                            background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: '0.9rem',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Intervals */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '0.3rem', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>
+                          ☀️ Daytime interval (sec)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="3600"
+                          value={schedule.dayInterval}
+                          onChange={(e) => {
+                            setSchedule(s => ({ ...s, dayInterval: Number(e.target.value) }));
+                            setHasChanges(true);
+                          }}
+                          style={{
+                            width: '100%', padding: '0.45rem', borderRadius: '4px',
+                            border: '1px solid rgba(255,200,0,0.35)',
+                            background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: '0.9rem',
+                          }}
+                        />
+                        <small style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
+                          Active {schedule.dayStart}–{schedule.dayEnd}
+                        </small>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', marginBottom: '0.3rem', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem' }}>
+                          🌙 Night interval (sec)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="3600"
+                          value={schedule.nightInterval}
+                          onChange={(e) => {
+                            setSchedule(s => ({ ...s, nightInterval: Number(e.target.value) }));
+                            setHasChanges(true);
+                          }}
+                          style={{
+                            width: '100%', padding: '0.45rem', borderRadius: '4px',
+                            border: '1px solid rgba(100,140,255,0.35)',
+                            background: 'rgba(0,0,0,0.35)', color: '#fff', fontSize: '0.9rem',
+                          }}
+                        />
+                        <small style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.75rem' }}>
+                          Outside day hours
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Auto Start */}

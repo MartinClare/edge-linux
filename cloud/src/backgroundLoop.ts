@@ -112,13 +112,41 @@ function buildCachedResult(
 
 // ── Analysis Loop ────────────────────────────────────────────────────
 
+/**
+ * Returns the analysis interval in milliseconds based on the day/night schedule.
+ * Falls back to `geminiInterval` when the schedule is disabled or misconfigured.
+ */
+function getEffectiveInterval(cfg: Record<string, unknown>): number {
+  const rtsp = cfg.rtsp as Record<string, unknown> | undefined;
+  const defaultMs = Math.max(1, Number(rtsp?.geminiInterval) || 5) * 1000;
+
+  const schedule = rtsp?.schedule as Record<string, unknown> | undefined;
+  if (!schedule?.enabled) return defaultMs;
+
+  const parseHHMM = (t: unknown): number => {
+    const parts = String(t ?? '').split(':');
+    return (parseInt(parts[0] ?? '0', 10) || 0) * 60 + (parseInt(parts[1] ?? '0', 10) || 0);
+  };
+
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const dayStartMin = parseHHMM(schedule.dayStart ?? '07:00');
+  const dayEndMin   = parseHHMM(schedule.dayEnd   ?? '19:00');
+
+  const isDay = nowMin >= dayStartMin && nowMin < dayEndMin;
+  const intervalSec = isDay
+    ? Math.max(1, Number(schedule.dayInterval)   || 60)
+    : Math.max(1, Number(schedule.nightInterval) || 600);
+
+  return intervalSec * 1000;
+}
+
 async function analysisIteration(): Promise<void> {
   try {
     const cfg = loadConfig();
     const ui = cfg.ui as Record<string, unknown> | undefined;
-    const rtsp = cfg.rtsp as Record<string, unknown> | undefined;
     const deepVisionEnabled = ui?.deepVisionEnabled !== false;
-    const interval = Math.max(1, Number(rtsp?.geminiInterval) || 5) * 1000;
+    const interval = getEffectiveInterval(cfg);
 
     if (!deepVisionEnabled) {
       scheduleAnalysis(interval);
@@ -240,12 +268,12 @@ export function startBackgroundLoops(): void {
   warmupIteration();
 }
 
-export function stopBackgroundLoops(): void {
+export async function stopBackgroundLoops(): Promise<void> {
   running = false;
   if (analysisTimer) { clearTimeout(analysisTimer); analysisTimer = null; }
   if (heartbeatTimer) { clearTimeout(heartbeatTimer); heartbeatTimer = null; }
   if (snapshotTimer) { clearTimeout(snapshotTimer); snapshotTimer = null; }
-  stopAllCaptures();
+  await stopAllCaptures();
   stopGo2RTC();
   console.log('[backgroundLoop] Stopped');
 }

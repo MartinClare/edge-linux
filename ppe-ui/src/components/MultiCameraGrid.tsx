@@ -25,6 +25,14 @@ interface VpnConfig {
   enabled: boolean;
 }
 
+interface Schedule {
+  enabled: boolean;
+  dayStart: string;
+  dayEnd: string;
+  dayInterval: number;
+  nightInterval: number;
+}
+
 interface AppConfig {
   ui?: {
     defaultAnalysisMode?: AnalysisMode;
@@ -34,6 +42,7 @@ interface AppConfig {
     cameras: CameraConfig[];
     fpsLimit: number;
     geminiInterval: number;
+    schedule?: Schedule;
     autoStart: boolean;
   };
   centralServer?: CentralServerConfig;
@@ -846,6 +855,7 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
           cameras={enabledCameras}
           configFpsLimit={config.rtsp.fpsLimit}
           configGeminiInterval={config.rtsp.geminiInterval}
+          configSchedule={config.rtsp.schedule ?? { enabled: false, dayStart: '07:00', dayEnd: '19:00', dayInterval: 60, nightInterval: 600 }}
           configAutoStart={config.rtsp.autoStart}
           configDeepVisionEnabled={config.ui?.deepVisionEnabled !== false}
           configCmpEnabled={config.centralServer?.enabled ?? false}

@@ -186,13 +186,25 @@ export function getCaptureStatus(rtspUrl: string, maxAgeMs: number): 'connecting
 }
 
 /**
- * Stop all persistent captures (for graceful shutdown).
+ * Stop all persistent captures and wait for the ffmpeg processes to exit.
+ * Uses SIGKILL so children die immediately rather than waiting for a graceful
+ * shutdown — this prevents orphaned ffmpeg processes from blocking systemd.
  */
-export function stopAllCaptures(): void {
+export async function stopAllCaptures(): Promise<void> {
+  const exits: Promise<void>[] = [];
   for (const [url, cap] of captures) {
-    if (cap.restartTimer) clearTimeout(cap.restartTimer);
-    if (cap.staleWatchdog) clearInterval(cap.staleWatchdog);
-    cap.process.kill('SIGTERM');
+    if (cap.restartTimer) { clearTimeout(cap.restartTimer); cap.restartTimer = null; }
+    if (cap.staleWatchdog) { clearInterval(cap.staleWatchdog); cap.staleWatchdog = null; }
+    if (!cap.process.killed) {
+      exits.push(new Promise<void>((resolve) => {
+        cap.process.once('exit', () => resolve());
+        // Safety timeout: if the process doesn't exit within 2 s, resolve anyway.
+        setTimeout(resolve, 2_000);
+      }));
+      cap.process.kill('SIGKILL');
+    }
     captures.delete(url);
   }
+  lastKnownFrames.clear();
+  await Promise.all(exits);
 }

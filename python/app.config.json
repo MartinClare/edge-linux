@@ -51,6 +51,13 @@
     ],
     "fpsLimit": 15,
     "geminiInterval": 600,
+    "schedule": {
+      "enabled": false,
+      "dayStart": "07:00",
+      "dayEnd": "19:00",
+      "dayInterval": 60,
+      "nightInterval": 600
+    },
     "autoStart": true
   },
   "debug": {
