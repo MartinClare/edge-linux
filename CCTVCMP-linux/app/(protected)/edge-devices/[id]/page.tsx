@@ -24,9 +24,15 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
 
   if (!camera) notFound();
 
-  // Load reports separately for the feed (latest 200, all columns needed)
+  // Load analysis reports separately for the feed.
+  // Heartbeats are intentionally hidden in the UI, so querying only analysis rows
+  // prevents recent keepalives from pushing older analyses out of the 200-row window.
   const reports = await prisma.edgeReport.findMany({
-    where: { cameraId: camera.id },
+    where: {
+      cameraId: camera.id,
+      keepalive: false,
+      NOT: { messageType: "keepalive" },
+    },
     orderBy: { receivedAt: "desc" },
     take: 200,
     select: {
@@ -57,7 +63,7 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
     camera.lastReportAt != null &&
     now - camera.lastReportAt.getTime() < ONLINE_THRESHOLD_MS;
 
-  const latestAnalysis = reports.find((r) => !r.keepalive && r.messageType !== "keepalive");
+  const latestAnalysis = reports[0] ?? null;
 
   const snapshotUrl = `/api/edge-devices/${camera.id}/snapshot`;
 
