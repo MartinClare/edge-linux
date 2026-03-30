@@ -59,10 +59,10 @@ export async function GET(
     headers: {
       "Content-Type": mimeType,
       "ETag": etag,
-      // Browser may serve the cached copy immediately (max-age=30) and then
-      // revalidate in the background (stale-while-revalidate=300).
-      // This means the old image is always shown instantly while the new one loads.
-      "Cache-Control": "public, max-age=30, stale-while-revalidate=300",
+      // no-cache: browser must revalidate every time (can still use ETag / 304).
+      // The client component already adds ?t= timestamps so ETag hits are rare,
+      // but this ensures CDNs / proxies never serve a stale snapshot.
+      "Cache-Control": "no-cache",
     },
   });
 }

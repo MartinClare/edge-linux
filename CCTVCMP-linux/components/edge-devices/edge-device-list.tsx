@@ -34,7 +34,7 @@ type Device = {
   reportCount: number;
 };
 
-const SNAPSHOT_REFRESH_MS = 30_000; // refresh every 30 s on the list page
+const SNAPSHOT_REFRESH_MS = 15_000; // refresh every 15 s on the list page
 
 /**
  * Snapshot thumbnail with graceful caching:

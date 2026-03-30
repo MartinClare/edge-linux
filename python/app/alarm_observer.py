@@ -724,12 +724,16 @@ class AlarmObserver:
         camera_id: str,
         camera_name: str,
         camera_stream_url: Optional[str] = None,
+        image_jpeg: Optional[bytes] = None,
     ) -> None:
         """Send a keepalive / heartbeat ping to CMP for a single camera.
 
         CMP updates Camera.lastReportAt on every keepalive so the Edge Devices list
         continues to show the camera as 'online' (within the 5-minute online window)
         even during quiet periods when no new analysis is produced.
+
+        If image_jpeg is provided the request is sent as multipart so CMP stores a fresh
+        snapshot — this keeps the Edge Devices thumbnails up-to-date (≤ 30 s old).
         """
         cfg = self.central_server_config
         if not cfg.get("enabled") or not cfg.get("url") or not cfg.get("apiKey"):
@@ -747,17 +751,20 @@ class AlarmObserver:
 
         def _do_keepalive() -> None:
             try:
-                headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
+                base_headers = {"X-API-Key": api_key}
                 if bypass_token:
-                    headers["x-vercel-protection-bypass"] = bypass_token
-                resp = requests.post(
-                    url,
-                    json=payload,
-                    headers=headers,
-                    timeout=15,
-                )
+                    base_headers["x-vercel-protection-bypass"] = bypass_token
+                if image_jpeg:
+                    files = {
+                        "payload": (None, json.dumps(payload), "application/json"),
+                        "image": ("frame.jpg", image_jpeg, "image/jpeg"),
+                    }
+                    resp = requests.post(url, files=files, headers=base_headers, timeout=20)
+                else:
+                    base_headers["Content-Type"] = "application/json"
+                    resp = requests.post(url, json=payload, headers=base_headers, timeout=15)
                 if resp.ok:
-                    logger.debug(f"Keepalive sent for {camera_id}")
+                    logger.debug(f"Keepalive sent for {camera_id} (snapshot={'yes' if image_jpeg else 'no'})")
                 else:
                     logger.warning(f"Keepalive {camera_id} got {resp.status_code}")
             except Exception as exc:

@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 interface CameraSnapshotProps {
   /** API URL for this camera's snapshot, e.g. /api/edge-devices/[id]/snapshot */
   snapshotUrl: string;
-  /** Refresh interval in ms (default 30 s) */
+  /** Refresh interval in ms (default 15 s) */
   refreshMs?: number;
 }
 
@@ -17,9 +17,9 @@ interface CameraSnapshotProps {
  *  - The visible image only swaps to the new frame once it is fully loaded.
  *  - If the fetch fails (network error or 204 = no image yet) the previous
  *    image stays visible — the component never flashes to a broken/empty state.
- *  - Auto-refreshes every `refreshMs` milliseconds (default 30 s).
+ *  - Auto-refreshes every `refreshMs` milliseconds (default 15 s).
  */
-export function CameraSnapshot({ snapshotUrl, refreshMs = 30_000 }: CameraSnapshotProps) {
+export function CameraSnapshot({ snapshotUrl, refreshMs = 15_000 }: CameraSnapshotProps) {
   const [pendingSrc, setPendingSrc] = useState(snapshotUrl);
   const [displaySrc, setDisplaySrc] = useState<string | null>(null);
 

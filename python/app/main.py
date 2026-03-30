@@ -351,7 +351,10 @@ async def _heartbeat_loop():
                     camera_id = cam.get("id", cam.get("name", "unknown"))
                     camera_name = cam.get("name", camera_id)
                     camera_stream_url = cam.get("url", "")
-                    observer.send_keepalive(camera_id, camera_name, camera_stream_url)
+                    # Capture a fresh frame so CMP snapshots stay current (≤ 30 s old).
+                    # Uses the same buffer-flush path as the Deep Vision loop.
+                    snapshot_jpeg = await asyncio.to_thread(_capture_jpeg_from_rtsp, camera_stream_url)
+                    observer.send_keepalive(camera_id, camera_name, camera_stream_url, snapshot_jpeg)
 
         except asyncio.CancelledError:
             logger.info("Heartbeat loop stopped")
