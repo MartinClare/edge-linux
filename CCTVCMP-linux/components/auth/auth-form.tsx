@@ -42,7 +42,7 @@ export function AuthForm() {
       <CardHeader><CardTitle>Sign in</CardTitle></CardHeader>
       <CardContent>
         <form action={onSubmit} className="space-y-4">
-          <Input type="email" name="email" placeholder="Email" required />
+          <Input type="text" name="email" placeholder="Username" required autoComplete="username" />
           <Input type="password" name="password" placeholder="Password" required />
           {error && <p className="text-sm text-red-400">{error}</p>}
           <Button type="submit" disabled={loading} className="w-full">{loading ? "Please wait..." : "Sign in"}</Button>
