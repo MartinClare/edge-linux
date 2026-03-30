@@ -8,9 +8,10 @@ import type { IncidentStatus } from "@prisma/client";
 type Props = {
   incidentId: string;
   currentStatus: IncidentStatus;
+  onStatusChange?: (incidentId: string, newStatus: IncidentStatus) => void;
 };
 
-export function IncidentActions({ incidentId, currentStatus }: Props) {
+export function IncidentActions({ incidentId, currentStatus, onStatusChange }: Props) {
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +36,7 @@ export function IncidentActions({ incidentId, currentStatus }: Props) {
         return;
       }
 
+      onStatusChange?.(incidentId, target as IncidentStatus);
       router.refresh();
     } catch {
       setError("Network error — please try again.");

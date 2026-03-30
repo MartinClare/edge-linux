@@ -61,8 +61,16 @@ const FILTERS: Array<{ label: string; value: IncidentStatus | "all" }> = [
 
 export function IncidentTable({ incidents }: { incidents: IncidentRow[] }) {
   const [filter, setFilter] = useState<IncidentStatus | "all">("all");
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
 
-  const filtered = filter === "all" ? incidents : incidents.filter((i) => i.status === filter);
+  function onStatusChange(incidentId: string, newStatus: IncidentStatus) {
+    if (newStatus === "dismissed") {
+      setHiddenIds((prev) => new Set([...prev, incidentId]));
+    }
+  }
+
+  const filtered = (filter === "all" ? incidents : incidents.filter((i) => i.status === filter))
+    .filter((i) => !hiddenIds.has(i.id));
 
   return (
     <Card>
@@ -164,7 +172,7 @@ export function IncidentTable({ incidents }: { incidents: IncidentRow[] }) {
                         View
                       </span>
                     )}
-                    <IncidentActions incidentId={incident.id} currentStatus={incident.status} />
+                    <IncidentActions incidentId={incident.id} currentStatus={incident.status} onStatusChange={onStatusChange} />
                   </div>
                 </TableCell>
               </TableRow>

@@ -53,7 +53,7 @@ function normalizeStreamUrl(value: unknown): string | null {
 }
 
 async function resolveOrCreateCamera(edgeCameraId: string, cameraName: string, streamUrl: string | null) {
-  let camera = await prisma.camera.findUnique({
+  const camera = await prisma.camera.findUnique({
     where: { edgeCameraId },
     include: { project: true, zone: true },
   });
@@ -192,10 +192,15 @@ async function propagateLastClassification(
     });
 
     // Still run alarm evaluation so dedup logic sees consecutive hits
-    const cachedResult = last.classificationJson as { classifications: import("@/lib/llm-classifier").Classification[] };
+    const cachedResult = last.classificationJson as Partial<import("@/lib/llm-classifier").ClassificationResult>;
     if (Array.isArray(cachedResult?.classifications)) {
       await evaluateAlarms(
-        { classifications: cachedResult.classifications, source: "llm" },
+        {
+          classifications: cachedResult.classifications,
+          source: cachedResult.source ?? "llm",
+          classifierModel: cachedResult.classifierModel ?? undefined,
+          visionVerification: cachedResult.visionVerification,
+        },
         cameraContext,
         edgeReportId,
         detectedAt

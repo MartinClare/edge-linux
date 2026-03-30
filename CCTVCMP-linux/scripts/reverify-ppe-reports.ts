@@ -12,12 +12,14 @@
 import { prisma } from "@/lib/prisma";
 import { verifyWithVision } from "@/lib/vision-verifier";
 import { classifyAnalysis } from "@/lib/llm-classifier";
-import { reconcileClassifications, deriveCmpRiskLevel } from "@/lib/vision-verifier";
+import { reconcileClassifications } from "@/lib/vision-verifier";
 import { existsSync } from "fs";
 import { readFile } from "fs/promises";
 import { join } from "path";
 
 const BATCH_SIZE = 10;
+type EdgeReportRecord = NonNullable<Awaited<ReturnType<typeof prisma.edgeReport.findFirst>>>;
+type IncidentRecord = NonNullable<Awaited<ReturnType<typeof prisma.incident.findFirst>>>;
 
 async function findReportsToReverify() {
   // Find PPE violation incidents and their associated edge reports
@@ -58,7 +60,7 @@ async function findReportsToReverify() {
   return reportsToCheck;
 }
 
-async function getImageBuffer(report: typeof prisma.edgeReport extends { findFirst: (...args: any[]) => Promise<infer R> } ? R : never): Promise<Buffer | null> {
+async function getImageBuffer(report: EdgeReportRecord): Promise<Buffer | null> {
   // Try BYTEA data first
   if (report.eventImageData && report.eventImageData.length > 0) {
     return Buffer.from(report.eventImageData);
@@ -83,8 +85,8 @@ async function getImageBuffer(report: typeof prisma.edgeReport extends { findFir
 }
 
 async function reverifyReport(
-  report: typeof prisma.edgeReport extends { findFirst: (...args: any[]) => Promise<infer R> } ? R : never,
-  incident: typeof prisma.incident extends { findFirst: (...args: any[]) => Promise<infer R> } ? R : never
+  report: EdgeReportRecord,
+  incident: IncidentRecord
 ) {
   const imageBuffer = await getImageBuffer(report);
   if (!imageBuffer) {
@@ -95,12 +97,12 @@ async function reverifyReport(
   }
 
   // Re-classify text
-  const analysis = {
+  const analysis: Parameters<typeof classifyAnalysis>[0] = {
     overallDescription: report.overallDescription,
     overallRiskLevel: report.overallRiskLevel,
-    constructionSafety: report.constructionSafety,
-    fireSafety: report.fireSafety,
-    propertySecurity: report.propertySecurity,
+    constructionSafety: report.constructionSafety as Parameters<typeof classifyAnalysis>[0]["constructionSafety"],
+    fireSafety: report.fireSafety as Parameters<typeof classifyAnalysis>[0]["fireSafety"],
+    propertySecurity: report.propertySecurity as Parameters<typeof classifyAnalysis>[0]["propertySecurity"],
     peopleCount: report.peopleCount ?? undefined,
     missingHardhats: report.missingHardhats ?? undefined,
     missingVests: report.missingVests ?? undefined,

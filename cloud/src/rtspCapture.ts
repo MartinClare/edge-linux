@@ -114,9 +114,28 @@ export function captureFrameFromRTSP(rtspUrl: string): Promise<Buffer | null> {
 
 /**
  * Get the latest frame synchronously (for the snapshot endpoint).
+ * Returns null if no frame has arrived yet or the last frame is older than maxAgeMs.
  */
-export function getLatestFrame(rtspUrl: string): Buffer | null {
-  return captures.get(rtspUrl)?.latestFrame ?? null;
+export function getLatestFrame(rtspUrl: string, maxAgeMs = Number.POSITIVE_INFINITY): Buffer | null {
+  const cap = captures.get(rtspUrl);
+  if (!cap?.latestFrame) return null;
+  if (Date.now() - cap.lastFrameAt > maxAgeMs) return null;
+  return cap.latestFrame;
+}
+
+/**
+ * Status of the capture process for a given URL.
+ *   'connecting'  – ffmpeg is running but no frame has arrived yet
+ *   'live'        – a recent frame is available
+ *   'stale'       – ffmpeg is running but the last frame is older than maxAgeMs
+ *   'stopped'     – no ffmpeg process at all
+ */
+export function getCaptureStatus(rtspUrl: string, maxAgeMs: number): 'connecting' | 'live' | 'stale' | 'stopped' {
+  const cap = captures.get(rtspUrl);
+  if (!cap) return 'stopped';
+  if (!cap.latestFrame || cap.lastFrameAt === 0) return 'connecting';
+  if (Date.now() - cap.lastFrameAt > maxAgeMs) return 'stale';
+  return 'live';
 }
 
 /**

@@ -5,19 +5,15 @@ const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 /**
  * Text classifier model.
  *
- * Default: google/gemini-2.5-flash
- *   — Built-in "thinking" mode reasons step-by-step before classifying, which
- *     handles ambiguous safety text (cooking smoke vs dangerous smoke, PPE
- *     partially obscured, etc.) far better than a non-thinking flash model.
- *   — ~6× cheaper than Claude/GPT-5 while matching them on structured JSON tasks.
+ * Default: qwen/qwen3.5-9b  — works in HK region, fast, good at structured JSON.
+ * Google Gemini models are region-blocked in HK.
  *
- * Override via CLASSIFIER_MODEL env var (e.g. anthropic/claude-sonnet-4-6 for
- * maximum quality, google/gemini-2.5-flash-lite for maximum throughput).
+ * Override via CLASSIFIER_MODEL env var.
  */
 const CLASSIFIER_MODEL =
-  process.env.CLASSIFIER_MODEL?.trim() || "google/gemini-2.5-flash";
+  process.env.CLASSIFIER_MODEL?.trim() || "qwen/qwen3-vl-32b-instruct";
 const CLASSIFIER_FALLBACK_MODEL =
-  process.env.CLASSIFIER_FALLBACK_MODEL?.trim() || "qwen/qwen3.5-9b";
+  process.env.CLASSIFIER_FALLBACK_MODEL?.trim() || "qwen/qwen3.5-flash-02-23";
 
 export type Classification = {
   type: IncidentType;
@@ -86,18 +82,24 @@ The edge device has already analysed the scene and produced a text report. Your 
 
 Strict rules:
 1. NEVER raise a new issue type that the edge text does not mention.
-2. Ignore vague terms like "near miss", "general hazard", "unsafe condition", or "people count".
+2. Ignore vague terms like "near miss", "general hazard", "unsafe condition".
 3. Do NOT classify fall_risk, near_miss, restricted_zone_entry, or smoke_detected.
-4. Do NOT use peopleCount to decide severity; it is not reliable enough.
-5. For PPE, only detect ppe_violation when the edge explicitly describes missing PPE or PPE-violation detections.
-6. For fire_detected, require the edge to mention active fire/flame/burning — not only smoke.
-7. If the edge description says the view is wide, distant, overview-only, or that PPE is unclear / not verifiable, DO NOT detect ppe_violation.
+4. For PPE, only detect ppe_violation when the edge explicitly describes missing PPE or PPE-violation detections.
+5. For fire_detected, require the edge to mention active fire/flame/burning — not only smoke.
+6. If the edge description says the view is wide, distant, overview-only, or that PPE is unclear / not verifiable, DO NOT detect ppe_violation.
+7. For machinery_hazard, ALL of the following must be true: (a) heavy machinery is present AND (b) a specific confirmed person is described as physically too close to that machine — within its swing radius, directly in its path, or in immediate danger of being struck — AND (c) peopleCount > 0. Workers simply being on the same site as machinery does NOT count.
+8. If the text only mentions excavators, cranes, forklifts, vehicles, or work activity WITHOUT explicitly stating a person is dangerously close to that specific machine right now, set machinery_hazard=false.
+9. CRITICAL — no speculative hazards: if the text uses conditional or hypothetical language such as "if workers were present", "potential risk if", "could be dangerous", "workers not visible but may be nearby", "risk of collision if", or any other hypothetical or future-tense phrasing, treat it as NOT detected. Only confirmed, currently observed proximity counts.
+10. If peopleCount = 0 and no person is explicitly seen in the text, set machinery_hazard=false regardless of what machinery is present.
+11. ABSOLUTE RULE — no workers, no high risk: if peopleCount = 0, the maximum riskLevel for ANY incident type is "low", EXCEPT for fire_detected which may still be "critical". A scene with no workers cannot be high risk for ppe_violation, machinery_hazard, or smoking.
+12. machinery_hazard example of FALSE positive (do NOT flag): "excavator operating on site, workers present nearby" — nearby is too vague.
+13. machinery_hazard example of TRUE positive (DO flag): "worker standing within the swing radius of the excavator arm" or "person directly in the path of the reversing forklift".
 
 Risk rules:
-- ppe_violation    → "high" when edge clearly reports missing PPE
-- smoking          → "high" when edge clearly reports a person smoking
-- fire_detected    → "critical" when edge clearly reports active fire/flame
-- machinery_hazard → "high" when edge clearly reports machinery too close to people
+- ppe_violation    → "high" only when edge clearly reports missing PPE AND peopleCount > 0
+- smoking          → "high" only when edge clearly reports a person actively smoking AND peopleCount > 0
+- fire_detected    → "critical" when edge clearly reports active fire/flame (regardless of people)
+- machinery_hazard → "high" only when edge clearly reports machinery too close to a confirmed person AND peopleCount > 0
 
 Return STRICT JSON only:
 {
@@ -174,6 +176,7 @@ function extractCompactPayload(analysis: AnalysisPayload) {
   // independently rather than echoing the edge device's single-number assessment.
   const base = {
     overallDescription: analysis.overallDescription,
+    peopleCount: analysis.peopleCount ?? 0,
     missingHardhats: analysis.missingHardhats ?? 0,
     missingVests: analysis.missingVests ?? 0,
     constructionIssues: analysis.constructionSafety.issues ?? [],
@@ -374,9 +377,17 @@ async function classifyWithLLM(analysis: AnalysisPayload): Promise<Classificatio
     if (!parsed) {
       throw new Error("Unable to parse model JSON payload");
     }
-    const filtered = (parsed.classifications ?? []).filter(
-      (c) => INCIDENT_TYPES.includes(c.type) && c.type !== "ppe_violation"
-    );
+    const noWorkers = (analysis.peopleCount ?? 0) === 0;
+    const filtered = (parsed.classifications ?? [])
+      .filter((c) => INCIDENT_TYPES.includes(c.type) && c.type !== "ppe_violation")
+      .map((c) => {
+        // Hard cap: no workers on site → nothing can be high/critical except active fire.
+        if (noWorkers && c.type !== "fire_detected") {
+          return { ...c, detected: false, riskLevel: "low" as const, confidence: 0.1,
+            reasoning: `[CMP override] peopleCount=0 — scene has no workers; risk capped at low. Original: ${c.reasoning}` };
+        }
+        return c;
+      });
     classificationCache.set(cacheKey, { at: Date.now(), results: filtered, model: usedModel });
     return filtered;
   } catch (e) {
@@ -389,12 +400,27 @@ async function classifyWithLLM(analysis: AnalysisPayload): Promise<Classificatio
 // ---- Keyword fallback (improved) ----
 
 const FIRE_KEYWORDS = ["active fire", "flame", "burning", "blaze", "on fire", "engulfed"];
-const MACHINERY_KEYWORDS = ["machine", "machinery", "heavy equipment", "crane", "forklift", "excavator", "too close"];
+const MACHINERY_OBJECT_KEYWORDS = ["machine", "machinery", "heavy equipment", "crane", "forklift", "excavator", "bulldozer", "truck", "vehicle"];
+// Only match language that confirms a person is actively too close to a specific machine right now.
+// Generic words like "near", "close to work area", or "operating nearby" are intentionally excluded.
+const MACHINERY_PROXIMITY_KEYWORDS = [
+  "swing radius", "within reach of", "directly in the path", "in the path of",
+  "too close to the machine", "too close to the excavator", "too close to the crane", "too close to the forklift",
+  "at risk of being struck", "struck by the machine", "struck by the excavator",
+  "danger zone of the machine", "in the danger zone", "unsafe distance from the machine",
+  "standing next to the operating", "standing beside the operating",
+];
+const HUMAN_KEYWORDS = ["worker", "person", "people", "human", "pedestrian"];
 const SMOKING_KEYWORDS = ["smoking", "cigarette", "tobacco"];
 
 function issuesContain(issues: string[], keywords: string[]): boolean {
   const text = issues.join(" ").toLowerCase();
   return keywords.some((k) => text.includes(k));
+}
+
+function textContainsAny(text: string, keywords: string[]): boolean {
+  const lower = text.toLowerCase();
+  return keywords.some((k) => lower.includes(k));
 }
 
 function issuesNegate(issues: string[], summary: string): boolean {
@@ -446,21 +472,39 @@ function fallbackClassify(analysis: AnalysisPayload): Classification[] {
     summary: string;
   }> = [
     { type: "fire_detected",         keywords: FIRE_KEYWORDS,      issues: analysis.fireSafety.issues,         summary: analysis.fireSafety.summary },
-    { type: "machinery_hazard",      keywords: MACHINERY_KEYWORDS, issues: analysis.constructionSafety.issues, summary: analysis.constructionSafety.summary },
+    { type: "machinery_hazard",      keywords: MACHINERY_OBJECT_KEYWORDS, issues: analysis.constructionSafety.issues, summary: analysis.constructionSafety.summary },
     { type: "smoking",               keywords: SMOKING_KEYWORDS,   issues: [...analysis.fireSafety.issues, ...analysis.propertySecurity.issues], summary: "" },
   ];
 
   for (const cat of categories) {
     const negated = issuesNegate(cat.issues, cat.summary);
-    const textDetected = !negated && cat.issues.length > 0 && issuesContain(cat.issues, cat.keywords);
-    const labelDetected = detectedByLabel.has(cat.type);
-    const detected = textDetected || labelDetected;
+    let textDetected = !negated && cat.issues.length > 0 && issuesContain(cat.issues, cat.keywords);
+    if (cat.type === "machinery_hazard") {
+      const combined = `${cat.summary} ${cat.issues.join(" ")}`.toLowerCase();
+      const hasMachine = textContainsAny(combined, MACHINERY_OBJECT_KEYWORDS);
+      const hasHuman = textContainsAny(combined, HUMAN_KEYWORDS);
+      // Require strict proximity language — person must be explicitly too close to the machine.
+      const hasDangerousProximity = textContainsAny(combined, MACHINERY_PROXIMITY_KEYWORDS);
+      const hasConfirmedPeople = (analysis.peopleCount ?? 0) > 0;
+      textDetected = !negated && hasMachine && hasHuman && hasDangerousProximity && hasConfirmedPeople;
+    }
+    let labelDetected = detectedByLabel.has(cat.type);
+    if (cat.type === "machinery_hazard") {
+      // Only trust the machine_proximity label when a person is confirmed on site.
+      labelDetected = labelDetected && (analysis.peopleCount ?? 0) > 0;
+    }
+    const noWorkers = (analysis.peopleCount ?? 0) === 0;
+    // Hard cap: no workers → nothing non-fire can be detected or high risk.
+    const effectiveDetected = (detected && cat.type === "fire_detected")
+      || (detected && !noWorkers);
 
     // CMP inherent risk — NOT copied from edge's overallRiskLevel
     const baseRisk = INHERENT_RISK[cat.type] ?? "medium";
-    const riskLevel = detected ? escalateByDetection(baseRisk, cat.type, detections) : "low";
+    const riskLevel = effectiveDetected ? escalateByDetection(baseRisk, cat.type, detections) : "low";
 
-    const reasoning = labelDetected
+    const reasoning = !effectiveDetected && detected && noWorkers
+      ? `No workers on site (peopleCount=0) — risk capped at low`
+      : labelDetected
       ? `CMP detection-label match → inherent ${riskLevel} for ${cat.type}`
       : textDetected
       ? `CMP keyword match → inherent ${riskLevel} for ${cat.type}`
@@ -468,7 +512,7 @@ function fallbackClassify(analysis: AnalysisPayload): Classification[] {
 
     results.push({
       type: cat.type,
-      detected,
+      detected: effectiveDetected,
       riskLevel,
       confidence: labelDetected ? 0.9 : textDetected ? 0.6 : 0.9,
       reasoning,

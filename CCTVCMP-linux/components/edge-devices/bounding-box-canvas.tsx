@@ -212,23 +212,6 @@ function drawBoxes(
     ctx.textBaseline = "middle";
     ctx.fillText(label, x1 + pad, labelY + labelH / 2);
 
-    // Optional description tooltip below the box
-    if (det.description) {
-      ctx.font = "11px system-ui, sans-serif";
-      const descW = ctx.measureText(det.description).width;
-      const descY = y2 + 2;
-      if (descY + 16 < H) {
-        ctx.fillStyle = "rgba(0,0,0,0.60)";
-        ctx.fillRect(x1, descY, Math.min(descW + pad * 2, W - x1), 15);
-        ctx.fillStyle = "#e5e7eb";
-        ctx.textBaseline = "middle";
-        ctx.fillText(
-          det.description.length > 60 ? det.description.slice(0, 57) + "…" : det.description,
-          x1 + pad,
-          descY + 7.5
-        );
-      }
-    }
   }
 }
 

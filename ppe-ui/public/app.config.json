@@ -14,9 +14,9 @@
     "cameras": [
       {
         "id": "camera1",
-        "name": "site_b_02",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_02",
-        "browserUrl": "http://fnnas.cccl4s.com:8554/site_b_02",
+        "name": "site_b_03",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_03",
+        "browserUrl": "http://fnnas.cccl4s.com:8554/site_b_03",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
@@ -41,9 +41,9 @@
       },
       {
         "id": "camera4",
-        "name": "site_b_11",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_11",
-        "browserUrl": "http://fnnas.cccl4s.com:8554/site_b_11",
+        "name": "site_a_02",
+        "url": "rtsp://fnnas.cccl4s.com:8554/site_a_02",
+        "browserUrl": "http://fnnas.cccl4s.com:8554/site_a_02",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
@@ -59,7 +59,7 @@
   },
   "centralServer": {
     "enabled": true,
-    "url": "https://cctvcmpchev.vercel.app/api/webhook/edge-report",
+    "url": "http://localhost:3002/api/webhook/edge-report",
     "apiKey": "axonedge852852",
     "vercelBypassToken": "DgDk0ncqfYOMOcldWHi1McwSWSiaqTpX"
   },

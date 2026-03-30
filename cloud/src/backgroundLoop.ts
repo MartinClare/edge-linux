@@ -15,7 +15,7 @@
  */
 
 import { Router, type Request, type Response } from 'express';
-import { captureFrameFromRTSP, getLatestFrame, stopAllCaptures } from './rtspCapture.js';
+import { captureFrameFromRTSP, getLatestFrame, getCaptureStatus, stopAllCaptures } from './rtspCapture.js';
 import { analyzeImageBuffer } from './analyzeCore.js';
 import { startGo2RTC, stopGo2RTC, updateGo2RTCStreams } from './go2rtcManager.js';
 import {
@@ -254,6 +254,11 @@ export function stopBackgroundLoops(): void {
 
 const router = Router();
 
+// A frame older than this is considered stale (stream has stopped delivering).
+// 15 s gives enough headroom for RTSP connection setup and transient network
+// hiccups while still catching a genuinely dead stream quickly.
+const SNAPSHOT_STALE_MS = 15_000;
+
 router.get('/deepvision/latest', (_req: Request, res: Response) => {
   const results = Array.from(latestResults.values())
     .sort((a, b) => b.updated_at - a.updated_at);
@@ -266,19 +271,31 @@ router.get('/snapshot/:cameraId', (req: Request, res: Response) => {
   const cam = cameras.find((c) => c.id === req.params.cameraId);
   if (!cam) { res.status(404).json({ error: 'Camera not found' }); return; }
 
-  const jpeg = getLatestFrame(cam.url);
-  if (!jpeg) {
-    // Ensure capture is started, tell client to retry shortly
-    captureFrameFromRTSP(cam.url);
-    res.status(204).end();
+  const status = getCaptureStatus(cam.url, SNAPSHOT_STALE_MS);
+
+  if (status === 'live') {
+    const jpeg = getLatestFrame(cam.url, SNAPSHOT_STALE_MS)!;
+    res.set({
+      'Content-Type': 'image/jpeg',
+      'Cache-Control': 'no-store, max-age=0',
+      'Pragma': 'no-cache',
+    });
+    res.send(jpeg);
     return;
   }
-  res.set({
-    'Content-Type': 'image/jpeg',
-    'Cache-Control': 'no-store, max-age=0',
-    'Pragma': 'no-cache',
-  });
-  res.send(jpeg);
+
+  // Ensure ffmpeg is running in all non-live cases
+  captureFrameFromRTSP(cam.url);
+
+  if (status === 'connecting') {
+    // ffmpeg is running but hasn't delivered a first frame yet — tell the
+    // client to keep polling without showing an error.
+    res.status(202).json({ status: 'connecting' });
+    return;
+  }
+
+  // stale or stopped — stream is genuinely unavailable
+  res.status(204).end();
 });
 
 export default router;

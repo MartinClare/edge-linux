@@ -25,23 +25,17 @@ export const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions
 
 /**
  * Available models on OpenRouter:
- * - google/gemini-3-flash-preview: Gemini 3 Flash Preview (fast, near-Pro quality, best for real-time)
- * - google/gemini-3.1-pro-preview: Gemini 3.1 Pro Preview (highest accuracy)
- * - google/gemini-2.5-flash: Gemini 2.5 Flash (stable, reasoning capable)
- * - google/gemini-2.5-pro: Gemini 2.5 Pro (high quality, stable)
- * - anthropic/claude-3.5-sonnet: Claude 3.5 (alternative)
+ * - qwen/qwen2.5-vl-72b-instruct: Qwen 2.5 VL 72B (vision+text, works in HK region)
+ * - qwen/qwen3.5-9b: Qwen 3.5 9B (text-only fallback, fast)
+ * - google/gemini-3.1-pro-preview: region-blocked in HK
+ * - google/gemini-2.5-flash: region-blocked in HK
  */
-export const MODEL_NAME = 'google/gemini-3.1-pro-preview';
+export const MODEL_NAME = process.env.VISION_MODEL || 'qwen/qwen3-vl-32b-instruct';
 
 /**
- * Fallback model used automatically when the primary model is banned in the
- * current region (OpenRouter 403 "Author … is banned").
- *
- * Qwen is used here because both Google and Anthropic are region-blocked on
- * this edge box's current VPN exit, while the user explicitly requested this
- * model as the alternate path.
+ * Fallback model when the primary is unavailable.
  */
-export const FALLBACK_MODEL_NAME = process.env.FALLBACK_MODEL || 'qwen/qwen3.5-9b';
+export const FALLBACK_MODEL_NAME = process.env.FALLBACK_MODEL || 'qwen/qwen2.5-vl-72b-instruct';
 
 /**
  * Supported languages for analysis output
@@ -229,7 +223,7 @@ Return your output STRICTLY as valid JSON with this exact structure (no markdown
 
 **BOUNDING BOX INSTRUCTIONS:**
 - Only add a PPE/person detection entry when there is an ACTUAL PPE VIOLATION.
-- Do NOT emit `person_ok` boxes. If PPE is fine, keep silent and add no person bbox.
+- Do NOT emit \`person_ok\` boxes. If PPE is fine, keep silent and add no person bbox.
 - If PPE is unclear, distant, blurred, blocked, or inside a cab, add NO PPE/person bbox for that person.
 - For each clearly verifiable violation, label is "no_hardhat", "no_vest", or "no_hardhat_no_vest".
 - Person/PPE boxes must be TIGHT around the actual worker only: from the visible top of the head/helmet to the feet or lowest visible body part, and from the left-most to right-most visible body edges.
@@ -237,8 +231,8 @@ Return your output STRICTLY as valid JSON with this exact structure (no markdown
 - If a worker is tiny, far away, or the resulting box would be very small/loose on a wide view, omit the bbox entirely.
 - For EACH hazard found in STEP 4 add one entry: label is "fire_smoke", "smoking", "machine_proximity", "working_at_height", "person_fallen", or "safety_hazard".
 - Hazard boxes must also be tight and specific. Do NOT draw a huge box covering a broad area when you cannot isolate the actual hazard location.
-- For `safety_hazard`, only emit a bbox when the hazard is visually localised to a specific object/spot (for example a spill, exposed edge, blocked opening, unsecured item, or clearly isolated obstruction).
-- If the hazard is only a general scene condition and you cannot localise it precisely, keep it in the text description only and emit NO `safety_hazard` bbox.
+- For \`safety_hazard\`, only emit a bbox when the hazard is visually localised to a specific object/spot (for example a spill, exposed edge, blocked opening, unsecured item, or clearly isolated obstruction).
+- If the hazard is only a general scene condition and you cannot localise it precisely, keep it in the text description only and emit NO \`safety_hazard\` bbox.
 - "bbox" must be [y_min, x_min, y_max, x_max] with integer values 0–1000 (normalized image coordinates).
 - Always include a brief "description" — especially for "safety_hazard" (explain what hazard was found).
 - If nothing is visible, set "detections" to [].
@@ -385,7 +379,7 @@ Return STRICT JSON (no markdown):
 
 **BOUNDING BOX INSTRUCTIONS:**
 - Only add a PPE/person detection entry when there is an ACTUAL PPE VIOLATION.
-- Do NOT emit `person_ok` boxes. If PPE is fine, keep silent and add no person bbox.
+- Do NOT emit \`person_ok\` boxes. If PPE is fine, keep silent and add no person bbox.
 - If PPE is unclear, distant, blurred, blocked, or inside a cab, add NO PPE/person bbox for that person.
 - For each clearly verifiable violation: label is "no_hardhat", "no_vest", or "no_hardhat_no_vest".
 - Person/PPE boxes must be TIGHT around the actual worker only: from the visible top of the head/helmet to the feet or lowest visible body part, and from the left-most to right-most visible body edges.
@@ -397,8 +391,8 @@ Return STRICT JSON (no markdown):
 - For fallen person: label "person_fallen" (box around them).
 - For any other hazard: label "safety_hazard" with description explaining the risk.
 - Hazard boxes must also be tight and specific. Do NOT draw a huge box covering a broad area when you cannot isolate the actual hazard location.
-- For `safety_hazard`, only emit a bbox when the hazard is visually localised to a specific object/spot.
-- If the hazard is only a general scene condition and you cannot localise it precisely, keep it in the text description only and emit NO `safety_hazard` bbox.
+- For \`safety_hazard\`, only emit a bbox when the hazard is visually localised to a specific object/spot.
+- If the hazard is only a general scene condition and you cannot localise it precisely, keep it in the text description only and emit NO \`safety_hazard\` bbox.
 - bbox: [y_min, x_min, y_max, x_max] integers 0–1000.
 - If nothing found, set "detections" to [].
 

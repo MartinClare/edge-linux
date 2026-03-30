@@ -47,6 +47,7 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const snapshotTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const snapshotObjectUrlRef = useRef<string | null>(null);
   const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastTimeRef = useRef<number>(0);
   const lastAdvanceRef = useRef<number>(Date.now());
@@ -56,22 +57,76 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
   const [state, setState] = useState<StreamState>('idle');
   const [error, setError] = useState<string>('');
   const [snapshotSrc, setSnapshotSrc] = useState<string>('');
+  const [snapshotConnecting, setSnapshotConnecting] = useState<boolean>(false);
 
   // ── Snapshot fallback ────────────────────────────────────────────
+  const clearSnapshotImage = useCallback(() => {
+    if (snapshotObjectUrlRef.current) {
+      URL.revokeObjectURL(snapshotObjectUrlRef.current);
+      snapshotObjectUrlRef.current = null;
+    }
+    setSnapshotSrc('');
+  }, []);
+
   const startSnapshot = useCallback(() => {
     if (!snapshotFallbackUrl) { setState('error'); return; }
     setState('snapshot');
-    const refresh = () => setSnapshotSrc(`${snapshotFallbackUrl}?t=${Date.now()}`);
-    refresh();
+
+    const refresh = async () => {
+      try {
+        const response = await fetch(`${snapshotFallbackUrl}?t=${Date.now()}`, {
+          cache: 'no-store',
+        });
+
+        if (response.status === 202) {
+          // Backend says ffmpeg is starting up — keep polling, show connecting state
+          setSnapshotConnecting(true);
+          clearSnapshotImage();
+          return;
+        }
+
+        if (response.status === 204) {
+          // Stream is genuinely unavailable
+          setSnapshotConnecting(false);
+          clearSnapshotImage();
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(`snapshot returned HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        if (blob.size === 0) {
+          setSnapshotConnecting(false);
+          clearSnapshotImage();
+          return;
+        }
+
+        setSnapshotConnecting(false);
+        if (snapshotObjectUrlRef.current) {
+          URL.revokeObjectURL(snapshotObjectUrlRef.current);
+        }
+        const nextUrl = URL.createObjectURL(blob);
+        snapshotObjectUrlRef.current = nextUrl;
+        setSnapshotSrc(nextUrl);
+      } catch {
+        setSnapshotConnecting(false);
+        clearSnapshotImage();
+      }
+    };
+
+    void refresh();
     snapshotTimerRef.current = setInterval(refresh, SNAPSHOT_INTERVAL_MS);
-  }, [snapshotFallbackUrl]);
+  }, [clearSnapshotImage, snapshotFallbackUrl]);
 
   const stopSnapshot = useCallback(() => {
     if (snapshotTimerRef.current) {
       clearInterval(snapshotTimerRef.current);
       snapshotTimerRef.current = null;
     }
-  }, []);
+    clearSnapshotImage();
+  }, [clearSnapshotImage]);
 
   // ── Watchdog: detect frozen video and reconnect ──────────────────
   const stopWatchdog = useCallback(() => {
@@ -284,6 +339,12 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
           alt={`${cameraName} snapshot`}
           style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
         />
+      )}
+
+      {state === 'snapshot' && !snapshotSrc && (
+        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: compact ? '0.75rem' : '0.9rem', textAlign: 'center', padding: '1rem' }}>
+          {snapshotConnecting ? 'Connecting to camera...' : 'Stream unavailable'}
+        </div>
       )}
 
       {/* Placeholder while connecting */}

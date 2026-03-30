@@ -21,20 +21,16 @@ const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 /**
  * Vision model for image re-analysis and edge description verification.
  *
- * Default: google/gemini-3-flash-preview
- *   — Newest Gemini, designed for agentic multimodal workflows.
- *   — Near-Pro reasoning on construction site images; #1 ranked in Health
- *     (closest publicly tracked safety-adjacent domain) on OpenRouter.
- *   — Supports 1 M token context, allowing large base64 images inline.
- *   — $0.50/M input — far cheaper than Claude ($3/M) or GPT-5.4 ($2.50/M).
+ * Default: qwen/qwen2.5-vl-72b-instruct
+ *   — Multimodal (vision + text), works in HK region.
+ *   — Google Gemini models are region-blocked in HK.
  *
- * Override via VISION_MODEL env var (e.g. anthropic/claude-sonnet-4-6 for
- * maximum accuracy when budget is not a concern).
+ * Override via VISION_MODEL env var.
  */
 const VISION_MODEL =
-  process.env.VISION_MODEL?.trim() || "google/gemini-3-flash-preview";
+  process.env.VISION_MODEL?.trim() || "qwen/qwen3-vl-32b-instruct";
 const VISION_FALLBACK_MODEL =
-  process.env.VISION_FALLBACK_MODEL?.trim() || "qwen/qwen3.5-9b";
+  process.env.VISION_FALLBACK_MODEL?.trim() || "qwen/qwen2.5-vl-72b-instruct";
 
 /**
  * Thinking budget for the vision model (Gemini 3 Flash reasoning tokens).
@@ -76,6 +72,7 @@ Step-by-step approach (reason carefully before answering):
 4. NEVER introduce a new issue type that the edge did not mention.
 5. Do NOT use people counts; they are not reliable enough for this task.
 6. For PPE only: if the people are too small, too distant, blurred, partially blocked, inside machinery cabs, or the view is a wide overview, treat PPE as NOT VERIFIABLE — do NOT confirm a PPE violation AND do NOT mention it. Stay completely silent about PPE when uncertain; never say PPE "cannot be assessed" or "is limited" — simply omit PPE from your response.
+7. For machinery_hazard, confirm it ONLY when a person is visibly too close to moving/working heavy machinery or clearly inside its immediate strike/swing path. Machinery present by itself is NOT a machinery_hazard.
 
 Risk rules:
 - ppe_violation    → "high" when visually supported

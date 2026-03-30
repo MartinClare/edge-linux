@@ -1222,3 +1222,15 @@ body {
   }
 }
 
+/* Ensure underscore and other descenders are never clipped by the input border */
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="url"],
+input[type="email"],
+input[type="search"],
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) {
+  padding-bottom: 0.55rem !important;
+  line-height: 1.5 !important;
+}
+

@@ -34,9 +34,6 @@ export async function evaluateAlarms(
 ): Promise<AlarmResult> {
   const result: AlarmResult = { created: [], skipped: [], recordOnly: [] };
 
-  const detected = classification.classifications.filter((c) => c.detected);
-  if (detected.length === 0) return result;
-
   const [rules, systemUser] = await Promise.all([
     prisma.alarmRule.findMany({ where: { enabled: true } }),
     prisma.user.findFirst({ where: { role: "admin" } }),
@@ -47,6 +44,43 @@ export async function evaluateAlarms(
     console.error("[AlarmEngine] No admin user found for incident logs");
     return result;
   }
+
+  const isCmpVerified = classification.source === "vision";
+
+  // CMP is the final arbiter for user-facing alarms. If a vision-verified result
+  // says an issue is not present, dismiss any matching open alarm immediately.
+  if (isCmpVerified) {
+    for (const cls of classification.classifications.filter((c) => !c.detected)) {
+      const openIncidents = await prisma.incident.findMany({
+        where: {
+          cameraId: camera.cameraId,
+          type: cls.type,
+          status: { in: ["open", "acknowledged"] as IncidentStatus[] },
+        },
+        select: { id: true },
+      });
+
+      for (const incident of openIncidents) {
+        await prisma.incident.update({
+          where: { id: incident.id },
+          data: {
+            status: "dismissed",
+            dismissedAt: new Date(),
+            logs: {
+              create: {
+                userId: systemUser.id,
+                action: "dismissed",
+              },
+            },
+          },
+        });
+        result.skipped.push({ type: cls.type, reason: "dismissed_by_cmp_verification" });
+      }
+    }
+  }
+
+  const detected = classification.classifications.filter((c) => c.detected);
+  if (detected.length === 0) return result;
 
   for (const cls of detected) {
     const rule = ruleMap.get(cls.type);
