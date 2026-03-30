@@ -228,7 +228,11 @@ Return your output STRICTLY as valid JSON with this exact structure (no markdown
 }
 
 **BOUNDING BOX INSTRUCTIONS:**
-- For EACH person (STEP 1) add one entry: label is "person_ok", "no_hardhat", "no_vest", or "no_hardhat_no_vest".
+- Only add a PPE/person detection entry when PPE is CLEARLY VERIFIABLE for that person.
+- If PPE is unclear, distant, blurred, blocked, or inside a cab, add NO person_ok / PPE bbox for that person.
+- For each clearly verifiable person, label is "person_ok", "no_hardhat", "no_vest", or "no_hardhat_no_vest".
+- Person/PPE boxes must be TIGHT around the actual worker only: from the visible top of the head/helmet to the feet or lowest visible body part, and from the left-most to right-most visible body edges.
+- Do NOT include nearby machinery, poles, barriers, shadows, or empty surrounding space in a person/PPE box.
 - For EACH hazard found in STEP 4 add one entry: label is "fire_smoke", "smoking", "machine_proximity", "working_at_height", "person_fallen", or "safety_hazard".
 - "bbox" must be [y_min, x_min, y_max, x_max] with integer values 0–1000 (normalized image coordinates).
 - Always include a brief "description" — especially for "safety_hazard" (explain what hazard was found).
@@ -375,7 +379,11 @@ Return STRICT JSON (no markdown):
 }
 
 **BOUNDING BOX INSTRUCTIONS:**
-- For EACH person: label is "person_ok", "no_hardhat", "no_vest", or "no_hardhat_no_vest".
+- Only add a PPE/person detection entry when PPE is CLEARLY VERIFIABLE for that person.
+- If PPE is unclear, distant, blurred, blocked, or inside a cab, add NO person_ok / PPE bbox for that person.
+- For each clearly verifiable person: label is "person_ok", "no_hardhat", "no_vest", or "no_hardhat_no_vest".
+- Person/PPE boxes must be TIGHT around the actual worker only: from the visible top of the head/helmet to the feet or lowest visible body part, and from the left-most to right-most visible body edges.
+- Do NOT include nearby machinery, poles, barriers, shadows, or empty surrounding space in a person/PPE box.
 - For fire/smoke area: label "fire_smoke". For a person smoking: label "smoking".
 - For machine too close to person: label "machine_proximity" (box around both).
 - For unsafe height work: label "working_at_height" (box around the worker).

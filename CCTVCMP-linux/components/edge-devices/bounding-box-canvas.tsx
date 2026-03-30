@@ -24,7 +24,7 @@ export type Detection = {
 };
 
 const BOX_COLORS: Record<string, string> = {
-  person_ok:          "#22c55e",
+  person_ok:          "#06b6d4",
   no_hardhat:         "#ef4444",
   no_vest:            "#f97316",
   no_hardhat_no_vest: "#dc2626",
@@ -37,7 +37,7 @@ const BOX_COLORS: Record<string, string> = {
 };
 
 const LABEL_TEXT: Record<string, string> = {
-  person_ok:          "✓ PPE OK",
+  person_ok:          "Worker",
   no_hardhat:         "⛑ No Hardhat",
   no_vest:            "🦺 No Vest",
   no_hardhat_no_vest: "⚠ No PPE",
@@ -48,6 +48,30 @@ const LABEL_TEXT: Record<string, string> = {
   person_fallen:      "🚨 FALLEN",
   safety_hazard:      "⚠ Hazard",
 };
+
+const PERSON_LABELS = new Set([
+  "person_ok",
+  "no_hardhat",
+  "no_vest",
+  "no_hardhat_no_vest",
+]);
+
+function tightenBoxForDisplay(det: Detection, bbox: [number, number, number, number]): [number, number, number, number] {
+  let [yMin, xMin, yMax, xMax] = bbox;
+
+  // Gemini's person/PPE boxes are often slightly loose and include surrounding
+  // context. Tighten them for display so the overlay sits more cleanly on the worker.
+  if (PERSON_LABELS.has(det.label)) {
+    const h = yMax - yMin;
+    const w = xMax - xMin;
+    xMin += w * 0.08;
+    xMax -= w * 0.08;
+    yMin += h * 0.12;
+    yMax -= h * 0.04;
+  }
+
+  return [yMin, xMin, yMax, xMax];
+}
 
 function drawBoxes(
   canvas: HTMLCanvasElement,
@@ -107,6 +131,7 @@ function drawBoxes(
     // Clamp to valid range
     const clamp = (v: number) => Math.max(0, Math.min(1000, v));
     [yMin, xMin, yMax, xMax] = [clamp(yMin), clamp(xMin), clamp(yMax), clamp(xMax)];
+    [yMin, xMin, yMax, xMax] = tightenBoxForDisplay(det, [yMin, xMin, yMax, xMax]);
 
     // Map 0-1000 normalised coords into the content area
     const x1 = offsetX + (xMin / 1000) * contentW;
