@@ -26,7 +26,13 @@ export default async function DashboardPage() {
         edgeReports: {
           orderBy: { receivedAt: "desc" },
           take: 1,
-          select: { overallRiskLevel: true, overallDescription: true, receivedAt: true },
+          select: {
+            messageType: true,
+            keepalive: true,
+            overallRiskLevel: true,
+            overallDescription: true,
+            receivedAt: true,
+          },
         },
       },
     }),
@@ -38,20 +44,30 @@ export default async function DashboardPage() {
   ]);
 
   const now = Date.now();
-  const edgeDevices = cameras.map((cam) => ({
-    id: cam.id,
-    name: cam.name,
-    edgeCameraId: cam.edgeCameraId,
-    streamUrl: cam.streamUrl,
-    status: cam.status,
-    lastReportAt: cam.lastReportAt?.toISOString() ?? null,
-    isOnline:
-      cam.status !== "maintenance" &&
-      cam.lastReportAt != null &&
-      now - cam.lastReportAt.getTime() < ONLINE_THRESHOLD_MS,
-    latestRiskLevel: cam.edgeReports[0]?.overallRiskLevel ?? null,
-    latestDescription: cam.edgeReports[0]?.overallDescription ?? null,
-  }));
+  const edgeDevices = cameras
+    .filter((cam) => {
+      // Hide probe-only / heartbeat-only pseudo devices from the dashboard.
+      // Real CCTV devices either publish a stream URL or have at least one
+      // non-keepalive analysis report.
+      const hasAnalysisReport = cam.edgeReports.some(
+        (r) => !r.keepalive && r.messageType !== "keepalive"
+      );
+      return Boolean(cam.streamUrl) || hasAnalysisReport;
+    })
+    .map((cam) => ({
+      id: cam.id,
+      name: cam.name,
+      edgeCameraId: cam.edgeCameraId,
+      streamUrl: cam.streamUrl,
+      status: cam.status,
+      lastReportAt: cam.lastReportAt?.toISOString() ?? null,
+      isOnline:
+        cam.status !== "maintenance" &&
+        cam.lastReportAt != null &&
+        now - cam.lastReportAt.getTime() < ONLINE_THRESHOLD_MS,
+      latestRiskLevel: cam.edgeReports[0]?.overallRiskLevel ?? null,
+      latestDescription: cam.edgeReports[0]?.overallDescription ?? null,
+    }));
 
   const edgeOnline = edgeDevices.filter((d) => d.isOnline).length;
   const openIncidents = incidents.filter((i) => i.status === "open").length;
@@ -91,7 +107,7 @@ export default async function DashboardPage() {
       <h2 className="text-2xl font-semibold">Operational Dashboard</h2>
       <KpiCards
         edgeOnline={edgeOnline}
-        edgeTotal={cameras.length}
+        edgeTotal={edgeDevices.length}
         openIncidents={openIncidents}
         highCriticalRisk={highCriticalRisk}
         avgResponseTime={avgResponseTime}
