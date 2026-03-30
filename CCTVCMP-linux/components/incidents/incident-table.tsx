@@ -148,7 +148,21 @@ export function IncidentTable({ incidents }: { incidents: IncidentRow[] }) {
                 </TableCell>
                 <TableCell>{incident.assignee?.name ?? "—"}</TableCell>
                 <TableCell>
-                  <IncidentActions incidentId={incident.id} currentStatus={incident.status} />
+                  <div className="flex items-center gap-2">
+                    {incident.evidence?.reportId ? (
+                      <Link
+                        href={`/incidents/edge-report/${incident.evidence.reportId}`}
+                        className="inline-flex items-center rounded-md border border-primary/50 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                      >
+                        View
+                      </Link>
+                    ) : (
+                      <span className="inline-flex items-center rounded-md border border-muted px-2.5 py-1 text-xs text-muted-foreground cursor-not-allowed">
+                        View
+                      </span>
+                    )}
+                    <IncidentActions incidentId={incident.id} currentStatus={incident.status} />
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
