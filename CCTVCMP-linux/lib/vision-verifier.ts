@@ -83,6 +83,11 @@ Risk rules:
 - fire_detected    → "critical" when active fire/flame is visible
 - machinery_hazard → "high" when machinery is too close to a person
 
+**CRITICAL PPE VERIFICATION RULE:**
+- If edge claims PPE violation (missing hardhat/vest) but you see workers WITH proper PPE → set detected: false
+- If edge claims PPE violation but view is unclear, distant, or cab-obstructed → set detected: false
+- Only set detected: true for ppe_violation when you CAN clearly see missing hardhat or vest
+
 Return STRICT JSON only — no markdown fences, no commentary outside the JSON:
 {
   "descriptionAccuracy": "accurate|partially_accurate|inaccurate",
@@ -307,14 +312,26 @@ export function reconcileClassifications(
         reasoning: `Ignored vision-only issue (edge did not mention it): ${v.reasoning}`,
       });
     } else if (t?.detected && !v?.detected) {
-      // Text claims detection but vision disagrees — reduce confidence
-      reconciled.push({
-        type,
-        detected: true,
-        riskLevel: t.riskLevel,
-        confidence: Math.max(0, t.confidence - 0.2),
-        reasoning: `Text detected but vision did not corroborate (confidence reduced): ${t.reasoning}`,
-      });
+      // Text claims detection but vision disagrees
+      // For PPE violations: if vision says it's OK or unclear, BLOCK completely (do not create incident)
+      // For other types: reduce confidence but keep detection
+      if (type === "ppe_violation") {
+        reconciled.push({
+          type,
+          detected: false,  // BLOCKED - vision found PPE OK or unclear
+          riskLevel: "low",
+          confidence: 0.1,
+          reasoning: `PPE violation claimed by edge but vision verification found PPE OK or unclear — incident blocked`,
+        });
+      } else {
+        reconciled.push({
+          type,
+          detected: true,
+          riskLevel: t.riskLevel,
+          confidence: Math.max(0, t.confidence - 0.2),
+          reasoning: `Text detected but vision did not corroborate (confidence reduced): ${t.reasoning}`,
+        });
+      }
     } else {
       // Neither detected
       reconciled.push({
