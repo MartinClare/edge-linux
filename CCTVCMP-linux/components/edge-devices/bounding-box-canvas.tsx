@@ -60,6 +60,17 @@ const NON_VIOLATION_LABELS = new Set([
   "person_ok",
 ]);
 
+const ALWAYS_RENDER_LABELS = new Set([
+  "no_hardhat",
+  "no_vest",
+  "no_hardhat_no_vest",
+  "fire_smoke",
+  "smoking",
+  "machine_proximity",
+  "working_at_height",
+  "person_fallen",
+]);
+
 function tightenBoxForDisplay(det: Detection, bbox: [number, number, number, number]): [number, number, number, number] {
   let [yMin, xMin, yMax, xMax] = bbox;
 
@@ -93,6 +104,24 @@ function normalizeBBox(det: Detection): [number, number, number, number] {
 
 function shouldRenderDetection(det: Detection, bbox: [number, number, number, number]): boolean {
   if (NON_VIOLATION_LABELS.has(det.label)) return false;
+  if (ALWAYS_RENDER_LABELS.has(det.label)) return true;
+
+  const [yMin, xMin, yMax, xMax] = bbox;
+  const w = xMax - xMin;
+  const h = yMax - yMin;
+  const areaRatio = (w * h) / 1_000_000;
+  const aspect = h > 0 ? w / h : 999;
+
+  if (det.label === "safety_hazard") {
+    // Keep only compact, localised hazards. Broad scene-level hazard warnings
+    // should remain in text but not draw a misleading box.
+    if (w < 36 || h < 36) return false;
+    if (areaRatio < 0.003) return false;
+    if (areaRatio > 0.18) return false;
+    if (aspect > 3.2 || aspect < 0.3) return false;
+    return true;
+  }
+
   return true;
 }
 

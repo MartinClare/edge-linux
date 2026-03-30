@@ -237,6 +237,8 @@ Return your output STRICTLY as valid JSON with this exact structure (no markdown
 - If a worker is tiny, far away, or the resulting box would be very small/loose on a wide view, omit the bbox entirely.
 - For EACH hazard found in STEP 4 add one entry: label is "fire_smoke", "smoking", "machine_proximity", "working_at_height", "person_fallen", or "safety_hazard".
 - Hazard boxes must also be tight and specific. Do NOT draw a huge box covering a broad area when you cannot isolate the actual hazard location.
+- For `safety_hazard`, only emit a bbox when the hazard is visually localised to a specific object/spot (for example a spill, exposed edge, blocked opening, unsecured item, or clearly isolated obstruction).
+- If the hazard is only a general scene condition and you cannot localise it precisely, keep it in the text description only and emit NO `safety_hazard` bbox.
 - "bbox" must be [y_min, x_min, y_max, x_max] with integer values 0–1000 (normalized image coordinates).
 - Always include a brief "description" — especially for "safety_hazard" (explain what hazard was found).
 - If nothing is visible, set "detections" to [].
@@ -395,6 +397,8 @@ Return STRICT JSON (no markdown):
 - For fallen person: label "person_fallen" (box around them).
 - For any other hazard: label "safety_hazard" with description explaining the risk.
 - Hazard boxes must also be tight and specific. Do NOT draw a huge box covering a broad area when you cannot isolate the actual hazard location.
+- For `safety_hazard`, only emit a bbox when the hazard is visually localised to a specific object/spot.
+- If the hazard is only a general scene condition and you cannot localise it precisely, keep it in the text description only and emit NO `safety_hazard` bbox.
 - bbox: [y_min, x_min, y_max, x_max] integers 0–1000.
 - If nothing found, set "detections" to [].
 
