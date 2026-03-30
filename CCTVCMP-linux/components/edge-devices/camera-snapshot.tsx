@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from "react";
 
+function withTimestamp(url: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
+}
+
 interface CameraSnapshotProps {
   /** API URL for this camera's snapshot, e.g. /api/edge-devices/[id]/snapshot */
   snapshotUrl: string;
@@ -20,13 +24,14 @@ interface CameraSnapshotProps {
  *  - Auto-refreshes every `refreshMs` milliseconds (default 15 s).
  */
 export function CameraSnapshot({ snapshotUrl, refreshMs = 15_000 }: CameraSnapshotProps) {
-  const [pendingSrc, setPendingSrc] = useState(snapshotUrl);
+  const [pendingSrc, setPendingSrc] = useState(() => withTimestamp(snapshotUrl));
   const [displaySrc, setDisplaySrc] = useState<string | null>(null);
 
-  // Bump pendingSrc on a timer so the hidden img re-fetches
+  // Refresh immediately when the URL changes, then keep polling.
   useEffect(() => {
+    setPendingSrc(withTimestamp(snapshotUrl));
     const id = setInterval(
-      () => setPendingSrc(`${snapshotUrl}?t=${Date.now()}`),
+      () => setPendingSrc(withTimestamp(snapshotUrl)),
       refreshMs
     );
     return () => clearInterval(id);

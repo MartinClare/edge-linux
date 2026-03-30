@@ -36,6 +36,10 @@ type Device = {
 
 const SNAPSHOT_REFRESH_MS = 15_000; // refresh every 15 s on the list page
 
+function withTimestamp(url: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}t=${Date.now()}`;
+}
+
 /**
  * Snapshot thumbnail with graceful caching:
  *  - A hidden <img> preloads the latest frame in the background.
@@ -47,14 +51,15 @@ function DeviceSnapshot({ deviceId, name }: { deviceId: string; name: string }) 
   const base = `/api/edge-devices/${deviceId}/snapshot`;
 
   // pendingSrc: what we're currently trying to load (bumped every 30 s)
-  const [pendingSrc, setPendingSrc] = useState(base);
+  const [pendingSrc, setPendingSrc] = useState(() => withTimestamp(base));
   // displaySrc: last successfully loaded image — never cleared on error
   const [displaySrc, setDisplaySrc] = useState<string | null>(null);
 
-  // Bump pendingSrc periodically so the hidden img re-fetches
+  // Refresh immediately on mount / device change, then poll.
   useEffect(() => {
+    setPendingSrc(withTimestamp(base));
     const id = setInterval(
-      () => setPendingSrc(`${base}?t=${Date.now()}`),
+      () => setPendingSrc(withTimestamp(base)),
       SNAPSHOT_REFRESH_MS
     );
     return () => clearInterval(id);
