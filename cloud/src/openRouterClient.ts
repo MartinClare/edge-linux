@@ -35,10 +35,13 @@ export const MODEL_NAME = 'google/gemini-3.1-pro-preview';
 
 /**
  * Fallback model used automatically when the primary model is banned in the
- * current region (OpenRouter 403 "Author … is banned").  Claude has no
- * regional restrictions and supports vision via image_url content blocks.
+ * current region (OpenRouter 403 "Author … is banned").
+ *
+ * Qwen is used here because both Google and Anthropic are region-blocked on
+ * this edge box's current VPN exit, while the user explicitly requested this
+ * model as the alternate path.
  */
-export const FALLBACK_MODEL_NAME = process.env.FALLBACK_MODEL || 'anthropic/claude-3-5-haiku';
+export const FALLBACK_MODEL_NAME = process.env.FALLBACK_MODEL || 'qwen/qwen3.5-9b';
 
 /**
  * Supported languages for analysis output
