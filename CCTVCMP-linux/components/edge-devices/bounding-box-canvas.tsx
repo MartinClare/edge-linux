@@ -237,9 +237,10 @@ type Props = {
   detections: Detection[];
   /** Extra CSS classes for the outer wrapper */
   className?: string;
+  showLegend?: boolean;
 };
 
-export function BoundingBoxCanvas({ imageUrl, detections, className = "" }: Props) {
+export function BoundingBoxCanvas({ imageUrl, detections, className = "", showLegend = true }: Props) {
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [imgLoaded, setImgLoaded] = useState(false);
@@ -288,7 +289,7 @@ export function BoundingBoxCanvas({ imageUrl, detections, className = "" }: Prop
           style={{ top: 0, left: 0 }}
         />
       </div>
-      {visibleDetections.length > 0 && (
+      {showLegend && visibleDetections.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
           {Array.from(new Set(visibleDetections.map((d) => d.label))).map((label) => (
             <span

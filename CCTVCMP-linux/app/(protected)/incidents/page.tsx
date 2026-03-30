@@ -5,11 +5,31 @@ import type { IncidentStatus, IncidentRiskLevel } from "@prisma/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { BoundingBoxCanvas } from "@/components/edge-devices/bounding-box-canvas";
+import type { Detection } from "@/components/edge-devices/bounding-box-canvas";
 import { formatHKT } from "@/lib/utils";
 import Link from "next/link";
 
 const VALID_STATUSES: IncidentStatus[] = ["open", "acknowledged", "resolved", "dismissed", "record_only"];
 const VALID_RISKS: IncidentRiskLevel[] = ["low", "medium", "high", "critical"];
+
+function extractDetections(rawJson: unknown): Detection[] {
+  if (!rawJson || typeof rawJson !== "object") return [];
+  const payload = rawJson as Record<string, unknown>;
+  const analysis = payload.analysis && typeof payload.analysis === "object"
+    ? (payload.analysis as Record<string, unknown>)
+    : payload;
+  const dets = analysis.detections;
+  if (!Array.isArray(dets)) return [];
+  return dets.filter(
+    (d): d is Detection =>
+      d !== null &&
+      typeof d === "object" &&
+      typeof (d as Record<string, unknown>).label === "string" &&
+      Array.isArray((d as Record<string, unknown>).bbox) &&
+      ((d as Record<string, unknown>).bbox as unknown[]).length === 4
+  );
+}
 
 export default async function IncidentsPage({
   searchParams,
@@ -62,6 +82,7 @@ export default async function IncidentsPage({
           eventImagePath: true,
           overallRiskLevel: true,
           receivedAt: true,
+          rawJson: true,
         },
         orderBy: { receivedAt: "desc" },
         take: 1000,
@@ -95,6 +116,7 @@ export default async function IncidentsPage({
           imagePath: best.eventImagePath,
           riskLevel: best.overallRiskLevel,
           receivedAt: best.receivedAt,
+          detections: extractDetections(best.rawJson),
         }
       : null;
 
@@ -127,6 +149,7 @@ export default async function IncidentsPage({
       eventImagePath: true,
       eventTimestamp: true,
       receivedAt: true,
+      rawJson: true,
     },
     orderBy: { receivedAt: "desc" },
   });
@@ -149,6 +172,7 @@ export default async function IncidentsPage({
           eventImagePath: true,
           eventTimestamp: true,
           receivedAt: true,
+          rawJson: true,
         },
         orderBy: { receivedAt: "desc" },
       });
@@ -275,11 +299,11 @@ export default async function IncidentsPage({
                   <TableCell>
                     {report.eventImagePath ? (
                       <Link href={`/incidents/edge-report/${report.id}`} className="block">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={report.eventImagePath}
-                          alt="Edge event evidence"
-                          className="h-12 w-20 rounded border object-cover"
+                        <BoundingBoxCanvas
+                          imageUrl={report.eventImagePath}
+                          detections={extractDetections(report.rawJson)}
+                          className="w-20"
+                          showLegend={false}
                         />
                       </Link>
                     ) : (

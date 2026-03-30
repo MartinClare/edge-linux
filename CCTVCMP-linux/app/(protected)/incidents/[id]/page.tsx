@@ -5,7 +5,27 @@ import { Badge } from "@/components/ui/badge";
 import { IncidentActions } from "@/components/incidents/incident-actions";
 import { IncidentNotes } from "@/components/incidents/incident-notes";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { BoundingBoxCanvas } from "@/components/edge-devices/bounding-box-canvas";
+import type { Detection } from "@/components/edge-devices/bounding-box-canvas";
 import { formatHKT } from "@/lib/utils";
+
+function extractDetections(rawJson: unknown): Detection[] {
+  if (!rawJson || typeof rawJson !== "object") return [];
+  const payload = rawJson as Record<string, unknown>;
+  const analysis = payload.analysis && typeof payload.analysis === "object"
+    ? (payload.analysis as Record<string, unknown>)
+    : payload;
+  const dets = analysis.detections;
+  if (!Array.isArray(dets)) return [];
+  return dets.filter(
+    (d): d is Detection =>
+      d !== null &&
+      typeof d === "object" &&
+      typeof (d as Record<string, unknown>).label === "string" &&
+      Array.isArray((d as Record<string, unknown>).bbox) &&
+      ((d as Record<string, unknown>).bbox as unknown[]).length === 4
+  );
+}
 
 export default async function IncidentDetailPage({ params }: { params: { id: string } }) {
   const incident = await prisma.incident.findUnique({
@@ -40,6 +60,7 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
       overallRiskLevel: true,
       overallDescription: true,
       receivedAt: true,
+      rawJson: true,
     },
     orderBy: { receivedAt: "desc" },
   });
@@ -56,6 +77,7 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
       overallRiskLevel: true,
       overallDescription: true,
       receivedAt: true,
+      rawJson: true,
     },
     orderBy: { receivedAt: "asc" },
   });
@@ -148,11 +170,10 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
                   Captured: {formatHKT(evidence.receivedAt)}
                 </span>
               </div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={evidence.eventImagePath}
-                alt="Incident evidence"
-                className="max-h-[420px] w-full rounded border object-contain"
+              <BoundingBoxCanvas
+                imageUrl={evidence.eventImagePath}
+                detections={extractDetections(evidence.rawJson)}
+                className="max-h-[420px]"
               />
               <p className="text-sm text-muted-foreground">{evidence.overallDescription}</p>
             </div>

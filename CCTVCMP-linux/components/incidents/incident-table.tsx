@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { IncidentActions } from "@/components/incidents/incident-actions";
+import { BoundingBoxCanvas } from "@/components/edge-devices/bounding-box-canvas";
+import type { Detection } from "@/components/edge-devices/bounding-box-canvas";
 import { formatHKT } from "@/lib/utils";
 
 type IncidentRow = {
@@ -27,6 +29,7 @@ type IncidentRow = {
     imagePath: string | null;
     riskLevel: string;
     receivedAt: Date;
+    detections?: Detection[];
   } | null;
 };
 
@@ -135,11 +138,11 @@ export function IncidentTable({ incidents }: { incidents: IncidentRow[] }) {
                 <TableCell>
                   {incident.evidence?.imagePath ? (
                     <Link href={`/incidents/${incident.id}`} className="block">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={incident.evidence.imagePath}
-                        alt="Incident evidence"
-                        className="h-12 w-20 rounded border object-cover"
+                      <BoundingBoxCanvas
+                        imageUrl={incident.evidence.imagePath}
+                        detections={incident.evidence.detections ?? []}
+                        className="w-20"
+                        showLegend={false}
                       />
                     </Link>
                   ) : (
