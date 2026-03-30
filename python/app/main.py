@@ -160,10 +160,14 @@ def _sanitise_config_for_frontend(config: object) -> object:
 
 def _capture_jpeg_from_rtsp(rtsp_url: str) -> Optional[bytes]:
     from .realtime_stream import _cv2_lock
+    from .video_utils import flush_video_buffer
     cap = None
     try:
         with _cv2_lock:
             cap = open_video_capture(rtsp_url)
+            # Flush buffered frames so we capture the current live frame,
+            # not a stale keyframe the camera had queued on connection.
+            flush_video_buffer(cap, max_frames=5)
             ret, frame = cap.read()
         if not ret or frame is None:
             return None
