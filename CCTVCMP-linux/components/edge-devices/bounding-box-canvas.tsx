@@ -93,6 +93,19 @@ function drawBoxes(
     offsetX = (W - contentW) / 2;
     offsetY = 0;
   }
+
+  // Debug logging (remove in production)
+  console.log("[BoundingBox] Canvas:", W, "x", H, "| Natural:", nw, "x", nh,
+    "| Content:", contentW.toFixed(1), "x", contentH.toFixed(1),
+    "| Offset:", offsetX.toFixed(1), ",", offsetY.toFixed(1),
+    "| Aspect:", naturalAspect.toFixed(3), "vs", elementAspect.toFixed(3));
+
+  // Debug: draw content area border (yellow) to verify letterbox calculation
+  ctx.strokeStyle = "#ffff00";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 5]);
+  ctx.strokeRect(offsetX, offsetY, contentW, contentH);
+  ctx.setLineDash([]);
   // ─────────────────────────────────────────────────────────────────────────
 
   for (const det of detections) {
@@ -114,6 +127,12 @@ function drawBoxes(
     const y2 = offsetY + (yMax / 1000) * contentH;
     const bw = x2 - x1;
     const bh = y2 - y1;
+
+    // Debug first detection only
+    if (det === detections[0]) {
+      console.log("[BoundingBox] First box - Raw:", det.bbox, "| Scaled:", [yMin, xMin, yMax, xMax].map(v=>v.toFixed(1)),
+        "| Canvas:", {x1: x1.toFixed(1), y1: y1.toFixed(1), w: bw.toFixed(1), h: bh.toFixed(1)});
+    }
 
     const color = BOX_COLORS[det.label] ?? "#a855f7";
     const label = LABEL_TEXT[det.label] ?? det.label;
