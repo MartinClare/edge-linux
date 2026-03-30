@@ -75,7 +75,7 @@ type Report = {
   rawJson: unknown;
 };
 
-type FilterMode = "all" | "analysis" | "alerts" | "keepalive";
+type FilterMode = "all" | "analysis" | "alerts";
 
 const INCIDENT_LABELS: Record<string, string> = {
   ppe_violation:        "PPE Violation",
@@ -122,18 +122,6 @@ function parseClassifications(raw: unknown): Classification[] {
   return (r.classifications as Classification[]).filter((c) => c.detected);
 }
 
-function KeepaliveRow({ report }: { report: Report }) {
-  return (
-    <div className="flex items-center gap-3 px-4 py-2 rounded-lg border border-border/40 bg-muted/20 text-xs text-muted-foreground">
-      <span className="h-2 w-2 rounded-full bg-green-500/60" />
-      <span className="font-medium text-green-400/80">Heartbeat</span>
-      <span className="ml-auto">{formatHKT(report.receivedAt)}</span>
-      <Link href={`/incidents/edge-report/${report.id}`} className="hover:text-foreground underline">
-        #
-      </Link>
-    </div>
-  );
-}
 
 function ReportCard({ report }: { report: Report }) {
   const [expanded, setExpanded] = useState(false);
@@ -302,41 +290,41 @@ const FILTER_LABELS: Record<FilterMode, string> = {
   all: "All",
   analysis: "Analysis",
   alerts: "Alerts Only",
-  keepalive: "Heartbeats",
 };
+
+/** Heartbeats are never shown — only analysis reports with snapshots. */
+const isAnalysis = (r: Report) => !r.keepalive && r.messageType !== "keepalive";
 
 export function EdgeDeviceReportFeed({ reports }: { reports: Report[] }) {
   const [filter, setFilter] = useState<FilterMode>("analysis");
 
-  const filtered = reports.filter((r) => {
-    if (filter === "keepalive") return r.keepalive || r.messageType === "keepalive";
-    if (filter === "analysis") return !r.keepalive && r.messageType !== "keepalive";
+  // Always exclude heartbeat/keepalive rows from the feed
+  const analysisReports = reports.filter(isAnalysis);
+
+  const filtered = analysisReports.filter((r) => {
     if (filter === "alerts") {
       const risk = (r.cmpRiskLevel ?? r.overallRiskLevel).toLowerCase();
-      return !r.keepalive && (risk === "high" || risk === "critical" || risk === "medium");
+      return risk === "high" || risk === "critical" || risk === "medium";
     }
-    return true;
+    return true; // "all" and "analysis" both show every analysis report
   });
 
-  const analysisCount = reports.filter((r) => !r.keepalive && r.messageType !== "keepalive").length;
-  const alertCount = reports.filter((r) => {
+  const alertCount = analysisReports.filter((r) => {
     const risk = (r.cmpRiskLevel ?? r.overallRiskLevel).toLowerCase();
-    return !r.keepalive && (risk === "high" || risk === "critical");
+    return risk === "high" || risk === "critical";
   }).length;
-  const keepaliveCount = reports.filter((r) => r.keepalive || r.messageType === "keepalive").length;
 
   const counts: Record<FilterMode, number> = {
-    all: reports.length,
-    analysis: analysisCount,
+    all: analysisReports.length,
+    analysis: analysisReports.length,
     alerts: alertCount,
-    keepalive: keepaliveCount,
   };
 
   return (
     <div className="space-y-4">
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
-        {(["analysis", "alerts", "all", "keepalive"] as FilterMode[]).map((mode) => (
+        {(["analysis", "alerts", "all"] as FilterMode[]).map((mode) => (
           <button
             key={mode}
             onClick={() => setFilter(mode)}
@@ -351,22 +339,18 @@ export function EdgeDeviceReportFeed({ reports }: { reports: Report[] }) {
           </button>
         ))}
         <span className="ml-auto text-xs text-muted-foreground">
-          Showing {filtered.length} of {reports.length} records
+          Showing {filtered.length} of {analysisReports.length} records
         </span>
       </div>
 
       {/* Feed */}
       {filtered.length === 0 ? (
         <div className="py-12 text-center text-muted-foreground text-sm">
-          No records match this filter.
+          No analysis records yet.
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map((r) =>
-            r.keepalive || r.messageType === "keepalive"
-              ? <KeepaliveRow key={r.id} report={r} />
-              : <ReportCard key={r.id} report={r} />
-          )}
+          {filtered.map((r) => <ReportCard key={r.id} report={r} />)}
         </div>
       )}
     </div>
