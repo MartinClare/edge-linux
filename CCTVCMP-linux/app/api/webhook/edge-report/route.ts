@@ -46,6 +46,58 @@ function isAnalysisReport(messageType: string, keepalive: boolean): boolean {
   return messageType === "analysis" && !keepalive;
 }
 
+function normalizeStreamUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+async function resolveOrCreateCamera(edgeCameraId: string, cameraName: string, streamUrl: string | null) {
+  let camera = await prisma.camera.findUnique({
+    where: { edgeCameraId },
+    include: { project: true, zone: true },
+  });
+
+  if (camera) return camera;
+
+  let project = await prisma.project.findFirst();
+  let zone = await prisma.zone.findFirst({ where: { projectId: project?.id } });
+  if (!project) {
+    project = await prisma.project.create({
+      data: { name: "Edge Site", location: "Edge" },
+    });
+  }
+  if (!zone) {
+    zone = await prisma.zone.create({
+      data: { projectId: project.id, name: "Default", riskLevel: "medium" },
+    });
+  }
+
+  try {
+    return await prisma.camera.create({
+      data: {
+        name: cameraName || edgeCameraId,
+        edgeCameraId,
+        streamUrl,
+        projectId: project.id,
+        zoneId: zone.id,
+      },
+      include: { project: true, zone: true },
+    });
+  } catch (err) {
+    // Two requests can race after a reset; if another request created the camera
+    // first, re-read it instead of failing the whole webhook with a 500.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      const existing = await prisma.camera.findUnique({
+        where: { edgeCameraId },
+        include: { project: true, zone: true },
+      });
+      if (existing) return existing;
+    }
+    throw err;
+  }
+}
+
 async function parseRequestBody(request: NextRequest): Promise<
   | { ok: true; payload: unknown; image: { bytes: Buffer; mimeType: string } | null }
   | { ok: false; message: string }
@@ -257,158 +309,133 @@ async function processReportBackground(
 }
 
 export async function POST(request: NextRequest) {
-  const apiKey = getApiKey(request);
-  const expectedKey = process.env.EDGE_API_KEY;
-  if (!expectedKey || apiKey !== expectedKey) {
-    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-  }
-  // Optional bearer token for edge-side auth context (currently not enforced by CMP).
-  request.headers.get("authorization");
-
-  const parsedBody = await parseRequestBody(request);
-  if (!parsedBody.ok) {
-    return NextResponse.json({ message: parsedBody.message }, { status: 400 });
-  }
-
-  const parsed = edgeReportSchema.safeParse(parsedBody.payload);
-  if (!parsed.success) {
-    return NextResponse.json({ message: parsed.error.flatten() }, { status: 400 });
-  }
-
-  const {
-    edgeCameraId,
-    cameraName,
-    streamUrl,
-    timestamp,
-    messageType,
-    keepalive,
-    eventImageIncluded,
-    analysis,
-  } = parsed.data;
-
-  // edge-linux Python sends JSON only (no multipart). Only reject if client explicitly
-  // claims an image without uploading one.
-  if (eventImageIncluded === true && !parsedBody.image) {
-    return NextResponse.json(
-      { message: "eventImageIncluded=true but multipart image file is missing" },
-      { status: 400 }
-    );
-  }
-
-  // --- Resolve or auto-create camera ---
-  let camera = await prisma.camera.findUnique({
-    where: { edgeCameraId },
-    include: { project: true, zone: true },
-  });
-
-  if (!camera) {
-    let project = await prisma.project.findFirst();
-    let zone = await prisma.zone.findFirst({ where: { projectId: project?.id } });
-    if (!project) {
-      project = await prisma.project.create({
-        data: { name: "Edge Site", location: "Edge" },
-      });
+  try {
+    const apiKey = getApiKey(request);
+    const expectedKey = process.env.EDGE_API_KEY;
+    if (!expectedKey || apiKey !== expectedKey) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
-    if (!zone) {
-      zone = await prisma.zone.create({
-        data: { projectId: project.id, name: "Default", riskLevel: "medium" },
-      });
+    // Optional bearer token for edge-side auth context (currently not enforced by CMP).
+    request.headers.get("authorization");
+
+    const parsedBody = await parseRequestBody(request);
+    if (!parsedBody.ok) {
+      return NextResponse.json({ message: parsedBody.message }, { status: 400 });
     }
-    camera = await prisma.camera.create({
-      data: {
-        name: cameraName || edgeCameraId,
-        edgeCameraId,
-        streamUrl: streamUrl.trim() || null,
-        projectId: project.id,
-        zoneId: zone.id,
-      },
-      include: { project: true, zone: true },
-    });
-  }
 
-  // Ensure camera has a zone
-  let zoneId = camera.zoneId;
-  if (!zoneId) {
-    const zone =
-      (await prisma.zone.findFirst({ where: { projectId: camera.projectId } })) ??
-      (await prisma.zone.create({
-        data: { projectId: camera.projectId, name: "Default", riskLevel: "medium" },
-      }));
-    zoneId = zone.id;
-    await prisma.camera.update({ where: { id: camera.id }, data: { zoneId } });
-  }
+    const parsed = edgeReportSchema.safeParse(parsedBody.payload);
+    if (!parsed.success) {
+      return NextResponse.json({ message: parsed.error.flatten() }, { status: 400 });
+    }
 
-  // --- 1. Persist EdgeReport (full payload in rawJson) ---
-  const detectedAt = new Date(timestamp);
-  const eventTimestamp = Number.isNaN(detectedAt.getTime()) ? new Date() : detectedAt;
-  const fullPayload = {
-    edgeCameraId,
-    cameraName,
-    streamUrl,
-    timestamp,
-    messageType,
-    keepalive,
-    eventImageIncluded: eventImageIncluded || !!parsedBody.image,
-    analysis: analysis ?? null,
-  };
-  const edgeReport = await prisma.edgeReport.create({
-    data: {
-      cameraId: camera.id,
+    const {
       edgeCameraId,
       cameraName,
+      streamUrl,
+      timestamp,
+      messageType,
+      keepalive,
+      eventImageIncluded,
+      analysis,
+    } = parsed.data;
+
+    // edge-linux Python sends JSON only (no multipart). Only reject if client explicitly
+    // claims an image without uploading one.
+    if (eventImageIncluded === true && !parsedBody.image) {
+      return NextResponse.json(
+        { message: "eventImageIncluded=true but multipart image file is missing" },
+        { status: 400 }
+      );
+    }
+
+    const normalizedStreamUrl = normalizeStreamUrl(streamUrl);
+
+    // --- Resolve or auto-create camera ---
+    const camera = await resolveOrCreateCamera(edgeCameraId, cameraName, normalizedStreamUrl);
+
+    // Ensure camera has a zone
+    let zoneId = camera.zoneId;
+    if (!zoneId) {
+      const zone =
+        (await prisma.zone.findFirst({ where: { projectId: camera.projectId } })) ??
+        (await prisma.zone.create({
+          data: { projectId: camera.projectId, name: "Default", riskLevel: "medium" },
+        }));
+      zoneId = zone.id;
+      await prisma.camera.update({ where: { id: camera.id }, data: { zoneId } });
+    }
+
+    // --- 1. Persist EdgeReport (full payload in rawJson) ---
+    const detectedAt = new Date(timestamp);
+    const eventTimestamp = Number.isNaN(detectedAt.getTime()) ? new Date() : detectedAt;
+    const fullPayload = {
+      edgeCameraId,
+      cameraName,
+      streamUrl,
+      timestamp,
       messageType,
       keepalive,
       eventImageIncluded: eventImageIncluded || !!parsedBody.image,
-      eventImageMimeType: parsedBody.image?.mimeType ?? null,
-      eventImageData: parsedBody.image?.bytes ?? null,
-      eventTimestamp,
-      overallRiskLevel: analysis?.overallRiskLevel ?? "Low",
-      overallDescription:
-        analysis?.overallDescription ??
-        (messageType === "keepalive" || keepalive ? "Keepalive heartbeat" : ""),
-      constructionSafety: analysis?.constructionSafety as object | undefined,
-      fireSafety: analysis?.fireSafety as object | undefined,
-      propertySecurity: analysis?.propertySecurity as object | undefined,
-      peopleCount: analysis?.peopleCount ?? null,
-      missingHardhats: analysis?.missingHardhats ?? null,
-      missingVests: analysis?.missingVests ?? null,
-      // detections stored in rawJson.analysis.detections (no separate column needed)
-      rawJson: fullPayload as object,
-    },
-  });
-
-  if (parsedBody.image) {
-    await prisma.edgeReport.update({
-      where: { id: edgeReport.id },
-      data: { eventImagePath: `/api/edge-reports/${edgeReport.id}/image` },
+      analysis: analysis ?? null,
+    };
+    const edgeReport = await prisma.edgeReport.create({
+      data: {
+        cameraId: camera.id,
+        edgeCameraId,
+        cameraName,
+        messageType,
+        keepalive,
+        eventImageIncluded: eventImageIncluded || !!parsedBody.image,
+        eventImageMimeType: parsedBody.image?.mimeType ?? null,
+        eventImageData: parsedBody.image?.bytes ?? null,
+        eventTimestamp,
+        overallRiskLevel: analysis?.overallRiskLevel ?? "Low",
+        overallDescription:
+          analysis?.overallDescription ??
+          (messageType === "keepalive" || keepalive ? "Keepalive heartbeat" : ""),
+        constructionSafety: analysis?.constructionSafety as object | undefined,
+        fireSafety: analysis?.fireSafety as object | undefined,
+        propertySecurity: analysis?.propertySecurity as object | undefined,
+        peopleCount: analysis?.peopleCount ?? null,
+        missingHardhats: analysis?.missingHardhats ?? null,
+        missingVests: analysis?.missingVests ?? null,
+        rawJson: fullPayload as object,
+      },
     });
+
+    if (parsedBody.image) {
+      await prisma.edgeReport.update({
+        where: { id: edgeReport.id },
+        data: { eventImagePath: `/api/edge-reports/${edgeReport.id}/image` },
+      });
+    }
+
+    // --- 2. Update Camera.lastReportAt and sync current edge metadata ---
+    await prisma.camera.update({
+      where: { id: camera.id },
+      data: {
+        lastReportAt: new Date(),
+        status: "online",
+        name: cameraName || camera.name,
+        streamUrl: normalizedStreamUrl ?? camera.streamUrl,
+      },
+    });
+
+    // --- 3. Fire background processing for ALL analysis reports (CMP decides severity) ---
+    if (analysis && isAnalysisReport(messageType, keepalive)) {
+      processReportBackground(
+        edgeReport.id,
+        analysis as Parameters<typeof classifyAnalysis>[0],
+        { cameraId: camera.id, projectId: camera.projectId, zoneId },
+        eventTimestamp,
+        parsedBody.image?.bytes,
+        parsedBody.image?.mimeType
+      ).catch(() => { /* already logged inside */ });
+    }
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (err) {
+    console.error("[webhook] POST /api/webhook/edge-report failed:", err);
+    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
   }
-
-  // --- 2. Update Camera.lastReportAt and sync current edge metadata ---
-  // Use CMP server receive time (new Date()), NOT the edge device's timestamp.
-  // This ensures clock drift on the edge box never causes false-offline readings.
-  await prisma.camera.update({
-    where: { id: camera.id },
-    data: {
-      lastReportAt: new Date(),
-      status: "online",
-      name: cameraName || camera.name,
-      streamUrl: streamUrl.trim() || camera.streamUrl,
-    },
-  });
-
-  // --- 3. Fire background processing for ALL analysis reports (CMP decides severity) ---
-  if (analysis && isAnalysisReport(messageType, keepalive)) {
-    processReportBackground(
-      edgeReport.id,
-      analysis as Parameters<typeof classifyAnalysis>[0],
-      { cameraId: camera.id, projectId: camera.projectId, zoneId },
-      eventTimestamp,
-      parsedBody.image?.bytes,
-      parsedBody.image?.mimeType
-    ).catch(() => { /* already logged inside */ });
-  }
-
-  // --- 4. Respond immediately so the edge device isn't kept waiting ---
-  return NextResponse.json({ success: true }, { status: 200 });
 }

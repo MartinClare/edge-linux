@@ -21,7 +21,7 @@ import type { AnalyticsSnapshot } from "@/lib/analytics";
 const RISK_COLORS = { high: "#ef4444", medium: "#f97316", low: "#22c55e" };
 
 export function AnalyticsCharts({ snapshot }: { snapshot: AnalyticsSnapshot }) {
-  const { trend, totalReports, highRiskCount, totalPeopleDetected, ppeCompliance } = snapshot;
+  const { trend, totalReports, highRiskCount, ppeCompliance } = snapshot;
 
   const riskDistribution = [
     { name: "High", value: trend.reduce((s, d) => s + d.highRisk, 0), fill: RISK_COLORS.high },
@@ -38,10 +38,9 @@ export function AnalyticsCharts({ snapshot }: { snapshot: AnalyticsSnapshot }) {
   return (
     <div className="space-y-4">
       {/* KPI Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard title="Total Reports (30d)" value={totalReports.toLocaleString()} sub="edge reports received" />
         <StatCard title="High-Risk Reports" value={highRiskCount.toLocaleString()} sub={`${totalReports ? Math.round((highRiskCount / totalReports) * 100) : 0}% of total`} accent="text-red-500" />
-        <StatCard title="People Detected" value={totalPeopleDetected.toLocaleString()} sub="across all reports" />
         <StatCard
           title="PPE Compliance"
           value={ppeCompliance !== null ? `${ppeCompliance}%` : "N/A"}

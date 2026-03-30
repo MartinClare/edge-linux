@@ -1,4 +1,13 @@
-import { EdgeReport } from "@prisma/client";
+type AnalyticsReport = {
+  receivedAt: Date;
+  overallRiskLevel: string;
+  cmpRiskLevel: string | null;
+  peopleCount: number | null;
+  missingHardhats: number | null;
+  missingVests: number | null;
+  keepalive: boolean;
+  messageType: string;
+};
 
 export type TrendPoint = {
   date: string;
@@ -19,8 +28,8 @@ export type AnalyticsSnapshot = {
   ppeCompliance: number | null;
 };
 
-/** Derive all analytics from real EdgeReport rows. */
-export function buildAnalyticsSnapshot(reports: EdgeReport[]): AnalyticsSnapshot {
+/** Derive all analytics from real EdgeReport rows. Excludes keepalive-only rows. */
+export function buildAnalyticsSnapshot(reports: AnalyticsReport[]): AnalyticsSnapshot {
   const dailyMap = new Map<
     string,
     { total: number; high: number; medium: number; low: number; withPeople: number; ppeCompliant: number }
@@ -30,8 +39,11 @@ export function buildAnalyticsSnapshot(reports: EdgeReport[]): AnalyticsSnapshot
   let totalWithPeople = 0;
   let totalPpeCompliant = 0;
   let totalPeopleDetected = 0;
+  let totalReports = 0;
 
   for (const r of reports) {
+    if (r.keepalive || r.messageType === "keepalive") continue;
+
     // Shift UTC → HKT (+8 h) then take YYYY-MM-DD
     const hktMs = r.receivedAt.getTime() + 8 * 60 * 60 * 1000;
     const hktDate = new Date(hktMs).toISOString().slice(0, 10);
@@ -41,9 +53,11 @@ export function buildAnalyticsSnapshot(reports: EdgeReport[]): AnalyticsSnapshot
     }
     const day = dailyMap.get(hktDate)!;
     day.total++;
+    totalReports++;
 
-    const risk = r.overallRiskLevel?.toLowerCase();
+    const risk = (r.cmpRiskLevel || r.overallRiskLevel || "Low").toLowerCase();
     if (risk === "high") { day.high++; totalHighRisk++; }
+    else if (risk === "critical") { day.high++; totalHighRisk++; }
     else if (risk === "medium") day.medium++;
     else day.low++;
 
@@ -71,7 +85,7 @@ export function buildAnalyticsSnapshot(reports: EdgeReport[]): AnalyticsSnapshot
 
   return {
     trend,
-    totalReports: reports.length,
+    totalReports,
     highRiskCount: totalHighRisk,
     totalPeopleDetected,
     ppeCompliance: totalWithPeople > 0 ? Math.round((totalPpeCompliant / totalWithPeople) * 100) : null,

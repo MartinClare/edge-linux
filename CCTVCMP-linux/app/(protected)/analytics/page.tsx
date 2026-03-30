@@ -11,9 +11,12 @@ export default async function AnalyticsPage() {
     select: {
       receivedAt: true,
       overallRiskLevel: true,
+      cmpRiskLevel: true,
       peopleCount: true,
       missingHardhats: true,
       missingVests: true,
+      keepalive: true,
+      messageType: true,
     },
     orderBy: { receivedAt: "asc" },
   });
