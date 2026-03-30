@@ -34,6 +34,13 @@ export const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions
 export const MODEL_NAME = 'google/gemini-3.1-pro-preview';
 
 /**
+ * Fallback model used automatically when the primary model is banned in the
+ * current region (OpenRouter 403 "Author … is banned").  Claude has no
+ * regional restrictions and supports vision via image_url content blocks.
+ */
+export const FALLBACK_MODEL_NAME = process.env.FALLBACK_MODEL || 'anthropic/claude-3-5-haiku';
+
+/**
  * Supported languages for analysis output
  */
 export type SupportedLanguage = 'en' | 'zh-TW';

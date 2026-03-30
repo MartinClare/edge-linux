@@ -11,7 +11,8 @@ import multer from 'multer';
 import { 
   OPENROUTER_API_KEY, 
   OPENROUTER_API_URL, 
-  MODEL_NAME, 
+  MODEL_NAME,
+  FALLBACK_MODEL_NAME,
   getSafetyAnalysisPrompt,
   type SupportedLanguage
 } from './openRouterClient.js';
@@ -157,19 +158,12 @@ router.post('/analyze-image', (req: Request, res: Response) => {
       return res.status(400).json(response);
     }
 
-    try {
-      // Convert buffer to base64
-      const imageBase64 = buffer.toString('base64');
-      const imageDataUrl = `data:${mimetype};base64,${imageBase64}`;
-
-      // Get the language-specific prompt
-      const analysisPrompt = getSafetyAnalysisPrompt(language);
-      const requestTimestamp = new Date().toISOString();
-      console.log(`[${requestTimestamp}] 🚀 Sending OpenRouter API request (language: ${language}, size: ${(buffer.length / 1024).toFixed(1)} KB)`);
+    /** Call OpenRouter with a specific model; returns the raw response text or throws. */
+    const callOpenRouter = async (model: string, imageDataUrl: string, prompt: string): Promise<string> => {
       const startTime = Date.now();
-
-      // Call OpenRouter API with Gemini
-      const openRouterResponse = await fetch(OPENROUTER_API_URL, {
+      const ts = new Date().toISOString();
+      console.log(`[${ts}] 🚀 Sending OpenRouter request (model: ${model}, size: ${(buffer.length / 1024).toFixed(1)} KB)`);
+      const resp = await fetch(OPENROUTER_API_URL, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
@@ -178,60 +172,48 @@ router.post('/analyze-image', (req: Request, res: Response) => {
           'X-Title': 'Axon Vision Safety Demo',
         },
         body: JSON.stringify({
-          model: MODEL_NAME,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: analysisPrompt,
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: imageDataUrl,
-                  },
-                },
-              ],
-            },
-          ],
+          model,
+          messages: [{ role: 'user', content: [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: imageDataUrl } }] }],
         }),
       });
-
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-      
-      if (!openRouterResponse.ok) {
-        console.error(`[${requestTimestamp}] ❌ OpenRouter API failed (${openRouterResponse.status}, took ${duration}s)`);
-        // Try to parse as JSON, but handle HTML error pages
-        const contentType = openRouterResponse.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const errorData = await openRouterResponse.json() as { error?: { message?: string } };
-          console.error('OpenRouter API error response:', errorData);
-          throw new Error(errorData.error?.message || `API error: ${openRouterResponse.status}`);
-        } else {
-          const errorText = await openRouterResponse.text();
-          console.error('OpenRouter returned non-JSON response:', errorText.substring(0, 200));
-          throw new Error(`API error: ${openRouterResponse.status} - Service temporarily unavailable`);
-        }
+      if (!resp.ok) {
+        const ct = resp.headers.get('content-type') || '';
+        const errMsg = ct.includes('application/json')
+          ? ((await resp.json() as { error?: { message?: string } }).error?.message || `API error: ${resp.status}`)
+          : `API error: ${resp.status}`;
+        console.error(`[${ts}] ❌ OpenRouter failed (${resp.status}, took ${duration}s): ${errMsg}`);
+        throw Object.assign(new Error(errMsg), { status: resp.status });
       }
+      const result = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
+      console.log(`[${ts}] ✅ OpenRouter success (model: ${model}, took ${duration}s)`);
+      const text = result.choices?.[0]?.message?.content;
+      if (!text) throw new Error('Empty response from OpenRouter');
+      return text;
+    };
 
-      const result = await openRouterResponse.json() as {
-        choices?: Array<{
-          message?: {
-            content?: string;
-          };
-        }>;
-      };
-      console.log(`[${requestTimestamp}] ✅ OpenRouter API success (took ${duration}s)`);
-      console.log('OpenRouter response:', JSON.stringify(result, null, 2));
-      
-      // Extract response text
-      const responseText = result.choices?.[0]?.message?.content;
-      
-      if (!responseText) {
-        console.error('Full API response:', result);
-        throw new Error(`Empty response from AI model. Response: ${JSON.stringify(result)}`);
+    try {
+      // Convert buffer to base64
+      const imageBase64 = buffer.toString('base64');
+      const imageDataUrl = `data:${mimetype};base64,${imageBase64}`;
+
+      // Get the language-specific prompt
+      const analysisPrompt = getSafetyAnalysisPrompt(language);
+
+      // Attempt primary model; fall back automatically on region bans (403)
+      let responseText: string;
+      try {
+        responseText = await callOpenRouter(MODEL_NAME, imageDataUrl, analysisPrompt);
+      } catch (primaryErr: unknown) {
+        const status = (primaryErr as { status?: number }).status;
+        const msg = (primaryErr as Error).message || '';
+        const isBanned = status === 403 || msg.toLowerCase().includes('banned') || msg.toLowerCase().includes('not available in your region');
+        if (isBanned) {
+          console.warn(`Primary model (${MODEL_NAME}) is region-blocked. Retrying with fallback: ${FALLBACK_MODEL_NAME}`);
+          responseText = await callOpenRouter(FALLBACK_MODEL_NAME, imageDataUrl, analysisPrompt);
+        } else {
+          throw primaryErr;
+        }
       }
 
       // Parse the response
