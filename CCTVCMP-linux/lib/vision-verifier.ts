@@ -75,7 +75,7 @@ Step-by-step approach (reason carefully before answering):
 3. Compare the image to the edge summary and decide whether each edge-mentioned issue is visually supported.
 4. NEVER introduce a new issue type that the edge did not mention.
 5. Do NOT use people counts; they are not reliable enough for this task.
-6. For PPE only: if the people are too small, too distant, blurred, partially blocked, or the view is a wide overview, treat PPE as NOT VERIFIABLE and do NOT confirm a PPE violation.
+6. For PPE only: if the people are too small, too distant, blurred, partially blocked, inside machinery cabs, or the view is a wide overview, treat PPE as NOT VERIFIABLE — do NOT confirm a PPE violation AND do NOT mention it. Stay completely silent about PPE when uncertain; never say PPE "cannot be assessed" or "is limited" — simply omit PPE from your response.
 
 Risk rules:
 - ppe_violation    → "high" when visually supported
@@ -87,7 +87,7 @@ Return STRICT JSON only — no markdown fences, no commentary outside the JSON:
 {
   "descriptionAccuracy": "accurate|partially_accurate|inaccurate",
   "missedHazards": [],
-  "incorrectClaims": ["describe each edge claim NOT visible in the image, including PPE claims that cannot be verified in a wide/unclear view"],
+  "incorrectClaims": ["describe each edge claim NOT visible in the image; if a PPE claim cannot be verified due to distance/angle/cab, omit it from incorrectClaims rather than flagging it as incorrect"],
   "visionClassifications": [
     { "type": "<one of the 4 types>", "detected": true/false, "riskLevel": "low|high|critical", "confidence": 0.0-1.0, "reasoning": "one concise line citing visual evidence" }
   ],
