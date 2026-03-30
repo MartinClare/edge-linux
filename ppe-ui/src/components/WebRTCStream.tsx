@@ -32,9 +32,12 @@ const SNAPSHOT_INTERVAL_MS = 2_000;
 
 type StreamState = 'idle' | 'connecting' | 'playing' | 'snapshot' | 'error';
 
-const FREEZE_CHECK_MS = 3_000;   // check every 3 s
-const FREEZE_TIMEOUT_MS = 6_000; // reconnect if currentTime stalls for 6 s
+const FREEZE_CHECK_MS = 3_000;    // check every 3 s
+const FREEZE_TIMEOUT_MS = 6_000;  // reconnect if currentTime stalls for 6 s
 const MAX_RECONNECT_ATTEMPTS = 5;
+// After falling back to snapshot, retry WebRTC after this many ms.
+// Keeps the stream recovering automatically without user intervention.
+const WEBRTC_RETRY_FROM_SNAPSHOT_MS = 30_000;
 
 const WebRTCStream: React.FC<WebRTCStreamProps> = ({
   cameraId,
@@ -49,6 +52,7 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
   const snapshotTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const snapshotObjectUrlRef = useRef<string | null>(null);
   const watchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const webrtcRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTimeRef = useRef<number>(0);
   const lastAdvanceRef = useRef<number>(Date.now());
   const reconnectCountRef = useRef<number>(0);
@@ -72,6 +76,15 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
     if (!snapshotFallbackUrl) { setState('error'); return; }
     setState('snapshot');
 
+    // Automatically retry WebRTC after a delay — go2rtc may have recovered.
+    if (webrtcRetryRef.current) clearTimeout(webrtcRetryRef.current);
+    webrtcRetryRef.current = setTimeout(() => {
+      webrtcRetryRef.current = null;
+      console.log(`[WebRTC-${cameraId}] Auto-retrying WebRTC after snapshot fallback`);
+      reconnectCountRef.current = 0;
+      startWebRTCRef.current();
+    }, WEBRTC_RETRY_FROM_SNAPSHOT_MS);
+
     const refresh = async () => {
       try {
         const response = await fetch(`${snapshotFallbackUrl}?t=${Date.now()}`, {
@@ -86,9 +99,12 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
         }
 
         if (response.status === 204) {
-          // Stream is genuinely unavailable
+          // Stream unavailable — keep any existing image visible (less jarring
+          // than flashing "Stream unavailable" during a brief restart).
           setSnapshotConnecting(false);
-          clearSnapshotImage();
+          if (!snapshotObjectUrlRef.current) {
+            clearSnapshotImage();
+          }
           return;
         }
 
@@ -124,6 +140,10 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
     if (snapshotTimerRef.current) {
       clearInterval(snapshotTimerRef.current);
       snapshotTimerRef.current = null;
+    }
+    if (webrtcRetryRef.current) {
+      clearTimeout(webrtcRetryRef.current);
+      webrtcRetryRef.current = null;
     }
     clearSnapshotImage();
   }, [clearSnapshotImage]);

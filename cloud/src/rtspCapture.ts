@@ -14,21 +14,39 @@ import { spawn, type ChildProcess } from 'node:child_process';
 const JPEG_SOI = Buffer.from([0xff, 0xd8]);
 const JPEG_EOI = Buffer.from([0xff, 0xd9]);
 
+/**
+ * Kill ffmpeg and restart if no new frame arrives within this window.
+ * With `-stimeout 10000000` (10 s) in the ffmpeg args, ffmpeg will usually
+ * exit on its own when the RTSP source goes silent.  This watchdog is a
+ * belt-and-suspenders fallback for cases where ffmpeg stays alive but
+ * simply stops producing output (e.g. codec hang, pipe stall).
+ */
+const STALE_KILL_MS = 20_000;
+
 interface PersistentCapture {
   process: ChildProcess;
   latestFrame: Buffer | null;
   accum: Buffer;
   lastFrameAt: number;
   restartTimer: ReturnType<typeof setTimeout> | null;
+  staleWatchdog: ReturnType<typeof setInterval> | null;
   url: string;
 }
 
 const captures = new Map<string, PersistentCapture>();
 
+/**
+ * Persist the last received frame even after the ffmpeg process exits.
+ * This lets the snapshot endpoint serve a (slightly stale) image during
+ * the restart window so the UI never flashes "Stream unavailable".
+ */
+const lastKnownFrames = new Map<string, { frame: Buffer; at: number }>();
+
 function startPersistentCapture(rtspUrl: string): PersistentCapture {
   const args = [
     '-hide_banner', '-loglevel', 'error',
     '-rtsp_transport', 'tcp',
+    '-stimeout', '10000000',   // 10 s socket timeout: exit cleanly if RTSP stalls
     '-i', rtspUrl,
     '-r', '2',                    // 2 fps output
     '-f', 'image2pipe',
@@ -47,6 +65,7 @@ function startPersistentCapture(rtspUrl: string): PersistentCapture {
     accum: Buffer.alloc(0),
     lastFrameAt: 0,
     restartTimer: null,
+    staleWatchdog: null,
     url: rtspUrl,
   };
 
@@ -69,6 +88,8 @@ function startPersistentCapture(rtspUrl: string): PersistentCapture {
       const frame = cap.accum.subarray(soiIdx, eoiIdx + 2);
       cap.latestFrame = Buffer.from(frame);
       cap.lastFrameAt = Date.now();
+      // New frame received — remove the stale fallback for this URL
+      lastKnownFrames.delete(rtspUrl);
       cap.accum = cap.accum.subarray(eoiIdx + 2);
     }
 
@@ -84,12 +105,28 @@ function startPersistentCapture(rtspUrl: string): PersistentCapture {
   });
 
   child.on('exit', (code) => {
+    // Persist the last frame before the capture is removed so callers can
+    // continue serving it during the restart window.
+    if (cap.latestFrame) {
+      lastKnownFrames.set(rtspUrl, { frame: cap.latestFrame, at: cap.lastFrameAt });
+    }
+    if (cap.staleWatchdog) { clearInterval(cap.staleWatchdog); cap.staleWatchdog = null; }
     console.warn(`[rtspCapture] ffmpeg exited (code=${code}) for ${rtspUrl}, restarting in 3s`);
     cap.restartTimer = setTimeout(() => {
       captures.delete(rtspUrl);
       ensureCapture(rtspUrl);
     }, 3_000);
   });
+
+  // Stale watchdog: kill ffmpeg if it stops producing frames.
+  // The exit handler above will restart it automatically.
+  cap.staleWatchdog = setInterval(() => {
+    if (cap.latestFrame && Date.now() - cap.lastFrameAt > STALE_KILL_MS) {
+      console.warn(`[rtspCapture] No frame for ${STALE_KILL_MS / 1000}s on ${rtspUrl} — killing stale ffmpeg`);
+      cap.process.kill('SIGTERM');
+      // exit handler fires → 3s delay → restart
+    }
+  }, 5_000);
 
   return cap;
 }
@@ -124,6 +161,16 @@ export function getLatestFrame(rtspUrl: string, maxAgeMs = Number.POSITIVE_INFIN
 }
 
 /**
+ * Return the last frame received before the ffmpeg process last exited.
+ * Used as a fallback during the restart/reconnect window so the UI can
+ * keep showing a (slightly stale) image instead of going blank.
+ * Returns null if we have never received a frame for this URL.
+ */
+export function getLastKnownFrame(rtspUrl: string): Buffer | null {
+  return lastKnownFrames.get(rtspUrl)?.frame ?? null;
+}
+
+/**
  * Status of the capture process for a given URL.
  *   'connecting'  – ffmpeg is running but no frame has arrived yet
  *   'live'        – a recent frame is available
@@ -144,6 +191,7 @@ export function getCaptureStatus(rtspUrl: string, maxAgeMs: number): 'connecting
 export function stopAllCaptures(): void {
   for (const [url, cap] of captures) {
     if (cap.restartTimer) clearTimeout(cap.restartTimer);
+    if (cap.staleWatchdog) clearInterval(cap.staleWatchdog);
     cap.process.kill('SIGTERM');
     captures.delete(url);
   }

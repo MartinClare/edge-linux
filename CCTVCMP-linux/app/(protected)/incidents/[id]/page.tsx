@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { IncidentActions } from "@/components/incidents/incident-actions";
@@ -52,6 +53,8 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
     where: {
       cameraId: incident.cameraId,
       eventImagePath: { not: null },
+      keepalive: false,
+      messageType: "analysis",
       receivedAt: { lte: incident.detectedAt },
     },
     select: {
@@ -69,6 +72,8 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
     where: {
       cameraId: incident.cameraId,
       eventImagePath: { not: null },
+      keepalive: false,
+      messageType: "analysis",
       receivedAt: { gte: incident.detectedAt },
     },
     select: {
@@ -176,6 +181,12 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
                 className="max-h-[420px]"
               />
               <p className="text-sm text-muted-foreground">{evidence.overallDescription}</p>
+              <Link
+                href={`/incidents/edge-report/${evidence.id}`}
+                className="text-xs text-primary hover:underline"
+              >
+                View full edge report →
+              </Link>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">No evidence image available for this incident.</p>

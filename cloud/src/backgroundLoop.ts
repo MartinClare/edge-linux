@@ -15,7 +15,7 @@
  */
 
 import { Router, type Request, type Response } from 'express';
-import { captureFrameFromRTSP, getLatestFrame, getCaptureStatus, stopAllCaptures } from './rtspCapture.js';
+import { captureFrameFromRTSP, getLatestFrame, getLastKnownFrame, getCaptureStatus, stopAllCaptures } from './rtspCapture.js';
 import { analyzeImageBuffer } from './analyzeCore.js';
 import { startGo2RTC, stopGo2RTC, updateGo2RTCStreams } from './go2rtcManager.js';
 import {
@@ -255,9 +255,15 @@ export function stopBackgroundLoops(): void {
 const router = Router();
 
 // A frame older than this is considered stale (stream has stopped delivering).
-// 15 s gives enough headroom for RTSP connection setup and transient network
-// hiccups while still catching a genuinely dead stream quickly.
-const SNAPSHOT_STALE_MS = 60_000;
+// The stale watchdog in rtspCapture.ts kills the ffmpeg process after 20 s of
+// no frames, so in practice 'stale' is a very brief transient state.
+const SNAPSHOT_STALE_MS = 30_000;
+
+const SNAPSHOT_HEADERS = {
+  'Content-Type': 'image/jpeg',
+  'Cache-Control': 'no-store, max-age=0',
+  'Pragma': 'no-cache',
+} as const;
 
 router.get('/deepvision/latest', (_req: Request, res: Response) => {
   const results = Array.from(latestResults.values())
@@ -275,11 +281,7 @@ router.get('/snapshot/:cameraId', (req: Request, res: Response) => {
 
   if (status === 'live') {
     const jpeg = getLatestFrame(cam.url, SNAPSHOT_STALE_MS)!;
-    res.set({
-      'Content-Type': 'image/jpeg',
-      'Cache-Control': 'no-store, max-age=0',
-      'Pragma': 'no-cache',
-    });
+    res.set(SNAPSHOT_HEADERS);
     res.send(jpeg);
     return;
   }
@@ -287,15 +289,21 @@ router.get('/snapshot/:cameraId', (req: Request, res: Response) => {
   // Ensure ffmpeg is running in all non-live cases
   captureFrameFromRTSP(cam.url);
 
-  if (status === 'connecting') {
-    // ffmpeg is running but hasn't delivered a first frame yet — tell the
-    // client to keep polling without showing an error.
-    res.status(202).json({ status: 'connecting' });
+  // During connecting / stale / stopped: serve the last frame we have so the
+  // UI keeps showing a (slightly stale) image rather than going blank.
+  // The stale watchdog or ffmpeg's own -stimeout will trigger a restart shortly.
+  const fallback =
+    getLatestFrame(cam.url, Number.POSITIVE_INFINITY) ??
+    getLastKnownFrame(cam.url);
+
+  if (fallback) {
+    res.set(SNAPSHOT_HEADERS);
+    res.send(fallback);
     return;
   }
 
-  // stale or stopped — stream is genuinely unavailable
-  res.status(204).end();
+  // No frame has ever been received for this camera — keep polling.
+  res.status(202).json({ status: 'connecting' });
 });
 
 export default router;
