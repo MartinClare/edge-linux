@@ -257,7 +257,7 @@ const router = Router();
 // A frame older than this is considered stale (stream has stopped delivering).
 // 15 s gives enough headroom for RTSP connection setup and transient network
 // hiccups while still catching a genuinely dead stream quickly.
-const SNAPSHOT_STALE_MS = 15_000;
+const SNAPSHOT_STALE_MS = 60_000;
 
 router.get('/deepvision/latest', (_req: Request, res: Response) => {
   const results = Array.from(latestResults.values())

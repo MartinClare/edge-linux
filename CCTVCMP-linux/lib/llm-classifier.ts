@@ -493,16 +493,17 @@ function fallbackClassify(analysis: AnalysisPayload): Classification[] {
       // Only trust the machine_proximity label when a person is confirmed on site.
       labelDetected = labelDetected && (analysis.peopleCount ?? 0) > 0;
     }
+    const rawDetected = textDetected || labelDetected;
     const noWorkers = (analysis.peopleCount ?? 0) === 0;
     // Hard cap: no workers → nothing non-fire can be detected or high risk.
-    const effectiveDetected = (detected && cat.type === "fire_detected")
-      || (detected && !noWorkers);
+    const effectiveDetected = (rawDetected && cat.type === "fire_detected")
+      || (rawDetected && !noWorkers);
 
     // CMP inherent risk — NOT copied from edge's overallRiskLevel
     const baseRisk = INHERENT_RISK[cat.type] ?? "medium";
     const riskLevel = effectiveDetected ? escalateByDetection(baseRisk, cat.type, detections) : "low";
 
-    const reasoning = !effectiveDetected && detected && noWorkers
+    const reasoning = !effectiveDetected && rawDetected && noWorkers
       ? `No workers on site (peopleCount=0) — risk capped at low`
       : labelDetected
       ? `CMP detection-label match → inherent ${riskLevel} for ${cat.type}`

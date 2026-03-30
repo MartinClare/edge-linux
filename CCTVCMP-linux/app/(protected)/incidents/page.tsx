@@ -75,6 +75,8 @@ export default async function IncidentsPage({
         where: {
           cameraId: { in: cameraIds },
           eventImagePath: { not: null },
+          keepalive: false,
+          messageType: "analysis",
         },
         select: {
           id: true,

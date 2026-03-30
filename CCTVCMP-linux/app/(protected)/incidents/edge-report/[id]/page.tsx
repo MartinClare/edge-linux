@@ -59,6 +59,12 @@ export default async function EdgeReportDetailPage({ params }: Props) {
     <div className="space-y-6">
       <AutoRefresh intervalSec={10} />
 
+      {report.keepalive && (
+        <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-400">
+          <strong>Keepalive report</strong> — this is a heartbeat message from the edge device. No AI analysis was performed on this frame. Risk level and detections shown below reflect the raw heartbeat, not a safety assessment.
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold">Edge Risk Record Details</h2>
