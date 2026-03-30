@@ -16,6 +16,8 @@ const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
  */
 const CLASSIFIER_MODEL =
   process.env.CLASSIFIER_MODEL?.trim() || "google/gemini-2.5-flash";
+const CLASSIFIER_FALLBACK_MODEL =
+  process.env.CLASSIFIER_FALLBACK_MODEL?.trim() || "qwen/qwen3.5-9b";
 
 export type Classification = {
   type: IncidentType;
@@ -312,39 +314,59 @@ async function classifyWithLLM(analysis: AnalysisPayload): Promise<Classificatio
     return cached.results;
   }
 
-  const response = await fetch(OPENROUTER_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://axon-vision-cmp.vercel.app",
-      "X-Title": "Axon CMP Classifier",
-    },
-    body: JSON.stringify({
-      model: CLASSIFIER_MODEL,
-      messages: [
-        { role: "system", content: CLASSIFICATION_PROMPT },
-        { role: "user", content: `Classify this safety report:\n${JSON.stringify(compactPayload, null, 2)}` },
-      ],
-      temperature: 0.1,
-      max_tokens: CLASSIFIER_MAX_TOKENS,
-      // Enable step-by-step reasoning for Gemini 2.5 Flash (thinking tokens).
-      // Other models ignore this parameter gracefully.
-      thinking: { type: "enabled", budget_tokens: CLASSIFIER_THINKING_BUDGET },
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text().catch(() => "unknown");
-    console.error(`[LLM-Classifier] API error ${response.status}: ${errText}`);
-    return [];
-  }
-
-  const result = await response.json() as {
-    choices?: Array<{ message?: { content?: string } }>;
+  const callModel = async (model: string) => {
+    const response = await fetch(OPENROUTER_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://axon-vision-cmp.vercel.app",
+        "X-Title": "Axon CMP Classifier",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: CLASSIFICATION_PROMPT },
+          { role: "user", content: `Classify this safety report:\n${JSON.stringify(compactPayload, null, 2)}` },
+        ],
+        temperature: 0.1,
+        max_tokens: CLASSIFIER_MAX_TOKENS,
+        // Gemini uses this; other models ignore it gracefully.
+        thinking: { type: "enabled", budget_tokens: CLASSIFIER_THINKING_BUDGET },
+      }),
+    });
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "unknown");
+      throw Object.assign(new Error(errText), { status: response.status });
+    }
+    const result = await response.json() as {
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    return result.choices?.[0]?.message?.content ?? "";
   };
 
-  const text = result.choices?.[0]?.message?.content;
+  let text = "";
+  let usedModel = CLASSIFIER_MODEL;
+  try {
+    text = await callModel(CLASSIFIER_MODEL);
+  } catch (err) {
+    const status = (err as { status?: number }).status;
+    const msg = err instanceof Error ? err.message.toLowerCase() : "";
+    const isBlocked = status === 403 || msg.includes("banned") || msg.includes("not available in your region");
+    if (!isBlocked) {
+      console.error(`[LLM-Classifier] API error ${status ?? "unknown"}:`, err);
+      return [];
+    }
+    console.warn(`[LLM-Classifier] Primary model blocked; retrying with ${CLASSIFIER_FALLBACK_MODEL}`);
+    try {
+      text = await callModel(CLASSIFIER_FALLBACK_MODEL);
+      usedModel = CLASSIFIER_FALLBACK_MODEL;
+    } catch (fallbackErr) {
+      console.error("[LLM-Classifier] Fallback model also failed:", fallbackErr);
+      return [];
+    }
+  }
+
   if (!text) return [];
 
   try {
@@ -355,7 +377,7 @@ async function classifyWithLLM(analysis: AnalysisPayload): Promise<Classificatio
     const filtered = (parsed.classifications ?? []).filter(
       (c) => INCIDENT_TYPES.includes(c.type) && c.type !== "ppe_violation"
     );
-    classificationCache.set(cacheKey, { at: Date.now(), results: filtered, model: CLASSIFIER_MODEL });
+    classificationCache.set(cacheKey, { at: Date.now(), results: filtered, model: usedModel });
     return filtered;
   } catch (e) {
     const preview = text.length > 600 ? `${text.slice(0, 600)}…` : text;

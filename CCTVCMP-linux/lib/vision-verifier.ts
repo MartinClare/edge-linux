@@ -33,6 +33,8 @@ const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
  */
 const VISION_MODEL =
   process.env.VISION_MODEL?.trim() || "google/gemini-3-flash-preview";
+const VISION_FALLBACK_MODEL =
+  process.env.VISION_FALLBACK_MODEL?.trim() || "qwen/qwen3.5-9b";
 
 /**
  * Thinking budget for the vision model (Gemini 3 Flash reasoning tokens).
@@ -166,55 +168,75 @@ export async function verifyWithVision(
   const dataUrl = `data:${mimeType};base64,${base64Image}`;
   const edgeSummary = buildEdgeSummaryText(analysis);
 
-  let response: Response;
+  const callModel = async (model: string) => {
+    let response: Response;
+    try {
+      response = await fetch(OPENROUTER_API_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://axon-vision-cmp.vercel.app",
+          "X-Title": "Axon CMP Vision Verifier",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: VISION_SYSTEM_PROMPT },
+            {
+              role: "user",
+              content: [
+                {
+                  type: "text",
+                  text: `Edge device analysis to verify:\n\n${edgeSummary}\n\nExamine the image carefully, then verify whether the description is accurate and provide your own independent safety classification.`,
+                },
+                {
+                  type: "image_url",
+                  image_url: { url: dataUrl },
+                },
+              ],
+            },
+          ],
+          temperature: 0.1,
+          max_tokens: 800,
+          thinking: { type: "enabled", budget_tokens: VISION_THINKING_BUDGET },
+        }),
+      });
+    } catch (err) {
+      throw Object.assign(err instanceof Error ? err : new Error(String(err)), { status: 0 });
+    }
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "unknown");
+      throw Object.assign(new Error(errText), { status: response.status });
+    }
+
+    const result = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    return result.choices?.[0]?.message?.content ?? "";
+  };
+
+  let text = "";
+  let usedModel = VISION_MODEL;
   try {
-    response = await fetch(OPENROUTER_API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": "https://axon-vision-cmp.vercel.app",
-        "X-Title": "Axon CMP Vision Verifier",
-      },
-      body: JSON.stringify({
-        model: VISION_MODEL,
-        messages: [
-          { role: "system", content: VISION_SYSTEM_PROMPT },
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Edge device analysis to verify:\n\n${edgeSummary}\n\nExamine the image carefully, then verify whether the description is accurate and provide your own independent safety classification.`,
-              },
-              {
-                type: "image_url",
-                image_url: { url: dataUrl },
-              },
-            ],
-          },
-        ],
-        temperature: 0.1,
-        // Extra headroom for thinking tokens (Gemini 3 Flash) + JSON output
-        max_tokens: 800,
-        // Enable internal reasoning before producing the JSON answer.
-        // Gemini models use this; other models ignore it gracefully.
-        thinking: { type: "enabled", budget_tokens: VISION_THINKING_BUDGET },
-      }),
-    });
+    text = await callModel(VISION_MODEL);
   } catch (err) {
-    console.error("[VisionVerifier] Network error calling vision API:", err);
-    return null;
+    const status = (err as { status?: number }).status;
+    const msg = err instanceof Error ? err.message.toLowerCase() : "";
+    const isBlocked = status === 403 || msg.includes("banned") || msg.includes("not available in your region");
+    if (!isBlocked) {
+      console.error("[VisionVerifier] Network/API error calling vision API:", err);
+      return null;
+    }
+    console.warn(`[VisionVerifier] Primary model blocked; retrying with ${VISION_FALLBACK_MODEL}`);
+    try {
+      text = await callModel(VISION_FALLBACK_MODEL);
+      usedModel = VISION_FALLBACK_MODEL;
+    } catch (fallbackErr) {
+      console.error("[VisionVerifier] Fallback model also failed:", fallbackErr);
+      return null;
+    }
   }
 
-  if (!response.ok) {
-    const errText = await response.text().catch(() => "unknown");
-    console.error(`[VisionVerifier] API error ${response.status}: ${errText}`);
-    return null;
-  }
-
-  const result = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-  const text = result.choices?.[0]?.message?.content;
   if (!text) return null;
 
   const parsed = parseVisionJson(text);
@@ -229,7 +251,7 @@ export async function verifyWithVision(
   );
 
   // Attach which model performed the verification so it can be displayed in the UI
-  (parsed as Record<string, unknown>).model = VISION_MODEL;
+  (parsed as Record<string, unknown>).model = usedModel;
 
   return parsed;
 }
