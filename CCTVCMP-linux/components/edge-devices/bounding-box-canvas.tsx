@@ -57,7 +57,7 @@ function drawBoxes(
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  // Match canvas pixel size to the displayed image dimensions
+  // Match canvas pixel size to the displayed image element dimensions
   const W = img.offsetWidth;
   const H = img.offsetHeight;
   canvas.width = W;
@@ -66,14 +66,52 @@ function drawBoxes(
 
   if (!W || !H) return;
 
-  for (const det of detections) {
-    const [yMin, xMin, yMax, xMax] = det.bbox;
+  // ── object-contain letterbox correction ───────────────────────────────────
+  // When CSS object-fit:contain is used, the rendered image content may not
+  // fill the full element — blank bars appear on the sides or top/bottom.
+  // Bbox coords (0-1000) refer to the actual image content, so we must find
+  // the content rect inside the element before mapping coordinates.
+  const nw = img.naturalWidth  || W;
+  const nh = img.naturalHeight || H;
+  const naturalAspect = nw / nh;
+  const elementAspect = W / H;
 
-    // Convert 0-1000 normalised coords to displayed pixel coords
-    const x1 = (xMin / 1000) * W;
-    const y1 = (yMin / 1000) * H;
-    const x2 = (xMax / 1000) * W;
-    const y2 = (yMax / 1000) * H;
+  let contentW: number, contentH: number, offsetX: number, offsetY: number;
+  if (Math.abs(naturalAspect - elementAspect) < 0.01) {
+    // Near-perfect fit — no bars
+    contentW = W; contentH = H; offsetX = 0; offsetY = 0;
+  } else if (naturalAspect > elementAspect) {
+    // Image wider than element → bars on top & bottom
+    contentW = W;
+    contentH = W / naturalAspect;
+    offsetX = 0;
+    offsetY = (H - contentH) / 2;
+  } else {
+    // Image taller than element → bars on left & right
+    contentH = H;
+    contentW = H * naturalAspect;
+    offsetX = (W - contentW) / 2;
+    offsetY = 0;
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  for (const det of detections) {
+    let [yMin, xMin, yMax, xMax] = det.bbox;
+
+    // Auto-detect if the model returned 0–1 instead of 0–1000 and scale up
+    const maxVal = Math.max(yMin, xMin, yMax, xMax);
+    const scale = maxVal <= 1.5 ? 1000 : 1;
+    yMin *= scale; xMin *= scale; yMax *= scale; xMax *= scale;
+
+    // Clamp to valid range
+    const clamp = (v: number) => Math.max(0, Math.min(1000, v));
+    [yMin, xMin, yMax, xMax] = [clamp(yMin), clamp(xMin), clamp(yMax), clamp(xMax)];
+
+    // Map 0-1000 normalised coords into the content area
+    const x1 = offsetX + (xMin / 1000) * contentW;
+    const y1 = offsetY + (yMin / 1000) * contentH;
+    const x2 = offsetX + (xMax / 1000) * contentW;
+    const y2 = offsetY + (yMax / 1000) * contentH;
     const bw = x2 - x1;
     const bh = y2 - y1;
 
@@ -143,15 +181,21 @@ export function BoundingBoxCanvas({ imageUrl, detections, className = "" }: Prop
     drawBoxes(canvasRef.current, imgRef.current, detections);
   }, [detections, imgLoaded]);
 
-  // Redraw whenever detections or image change
+  // Redraw whenever detections or image change; brief rAF delay so the browser
+  // has committed layout (offsetWidth/Height) before we sample dimensions.
   useEffect(() => {
-    redraw();
+    const id = requestAnimationFrame(() => redraw());
+    return () => cancelAnimationFrame(id);
   }, [redraw]);
 
-  // Redraw on window resize (image display size changes)
+  // Use ResizeObserver on the <img> element — catches container resizes too,
+  // not just window resize events.
   useEffect(() => {
-    window.addEventListener("resize", redraw);
-    return () => window.removeEventListener("resize", redraw);
+    const el = imgRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => requestAnimationFrame(() => redraw()));
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [redraw]);
 
   return (
@@ -161,7 +205,8 @@ export function BoundingBoxCanvas({ imageUrl, detections, className = "" }: Prop
         ref={imgRef}
         src={imageUrl}
         alt="Evidence"
-        className="block w-full rounded border object-contain"
+        className="block w-full rounded border"
+        style={{ objectFit: "contain" }}
         onLoad={() => setImgLoaded(true)}
       />
       {/* Canvas sits directly on top of the image, pointer-events:none so the
