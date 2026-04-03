@@ -53,60 +53,28 @@ export default async function IncidentsPage({
       zone: { select: { name: true } },
       camera: { select: { name: true } },
       assignee: { select: { name: true } },
-    },
-    orderBy: { detectedAt: "desc" },
-  });
-
-  const cameraIds = Array.from(new Set(incidents.map((i) => i.cameraId)));
-  const evidenceReports = cameraIds.length
-    ? await prisma.edgeReport.findMany({
-        where: {
-          cameraId: { in: cameraIds },
-          eventImagePath: { not: null },
-          keepalive: false,
-          messageType: "analysis",
-        },
+      edgeReport: {
         select: {
           id: true,
-          cameraId: true,
           eventImagePath: true,
           overallRiskLevel: true,
           receivedAt: true,
           rawJson: true,
         },
-        orderBy: { receivedAt: "desc" },
-        take: 1000,
-      })
-    : [];
-
-  const evidenceByCamera = new Map<string, typeof evidenceReports>();
-  for (const r of evidenceReports) {
-    const arr = evidenceByCamera.get(r.cameraId) ?? [];
-    arr.push(r);
-    evidenceByCamera.set(r.cameraId, arr);
-  }
+      },
+    },
+    orderBy: { detectedAt: "desc" },
+  });
 
   const incidentsWithEvidence = incidents.map((incident) => {
-    const candidates = evidenceByCamera.get(incident.cameraId) ?? [];
-    let best: (typeof candidates)[number] | null = null;
-    let bestDiff = Number.POSITIVE_INFINITY;
-
-    for (const c of candidates) {
-      const diff = Math.abs(c.receivedAt.getTime() - incident.detectedAt.getTime());
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        best = c;
-      }
-    }
-
-    // Keep only nearby evidence (within 2 hours) to avoid misleading mismatches.
-    const evidence = best && bestDiff <= 2 * 60 * 60 * 1000
+    const r = incident.edgeReport;
+    const evidence = r?.eventImagePath
       ? {
-          reportId: best.id,
-          imagePath: best.eventImagePath,
-          riskLevel: best.overallRiskLevel,
-          receivedAt: best.receivedAt,
-          detections: extractDetections(best.rawJson),
+          reportId: r.id,
+          imagePath: r.eventImagePath,
+          riskLevel: r.overallRiskLevel,
+          receivedAt: r.receivedAt,
+          detections: extractDetections(r.rawJson),
         }
       : null;
 

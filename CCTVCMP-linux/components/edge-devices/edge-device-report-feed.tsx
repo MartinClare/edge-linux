@@ -176,26 +176,6 @@ function ReportCard({ report }: { report: Report }) {
             {/* Description */}
             <p className="text-sm leading-relaxed line-clamp-2">{report.overallDescription || "No description."}</p>
 
-            {/* PPE stats row */}
-            {(report.peopleCount != null || report.missingHardhats != null || report.missingVests != null) && (
-              <div className="flex flex-wrap gap-3 text-xs">
-                {report.peopleCount != null && (
-                  <span className="text-muted-foreground">
-                    👥 <span className="font-medium text-foreground">{report.peopleCount}</span> people
-                  </span>
-                )}
-                {report.missingHardhats != null && report.missingHardhats > 0 && (
-                  <span className="text-red-400 font-semibold">
-                    ⛑ {report.missingHardhats} missing hardhat{report.missingHardhats > 1 ? "s" : ""}
-                  </span>
-                )}
-                {report.missingVests != null && report.missingVests > 0 && (
-                  <span className="text-orange-400 font-semibold">
-                    🦺 {report.missingVests} missing vest{report.missingVests > 1 ? "s" : ""}
-                  </span>
-                )}
-              </div>
-            )}
 
             {/* Critical incident type badges */}
             {criticalDetected.length > 0 && (

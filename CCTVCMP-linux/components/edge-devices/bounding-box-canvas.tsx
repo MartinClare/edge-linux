@@ -2,23 +2,27 @@
 
 /**
  * BoundingBoxCanvas — renders an evidence image with coloured bounding-box
- * overlays for every detection returned by the edge's Gemini analysis.
+ * overlays for every detection returned by the edge's VLM analysis.
  *
- * Gemini bbox format: [y_min, x_min, y_max, x_max] normalised 0–1000.
- * The canvas is sized to the displayed image and redrawn on window resize.
+ * VLM bbox format: [x_min, y_min, x_max, y_max] normalised 0–1000,
+ * where (0,0) is the top-left corner of the image. This is standard COCO/xy
+ * order as natively produced by Qwen-VL and other vision models.
  *
- * Colour scheme mirrors the PPE-UI MonitoringDashboard:
- *  • Red   — PPE violations, fallen person, safety hazard
+ * The canvas uses object-fit:contain letterbox correction so boxes align
+ * with the visible content area regardless of image aspect ratio.
+ *
+ * Colour scheme:
+ *  • Red   — PPE violations, fallen person
  *  • Orange — fire/smoke, machinery proximity
  *  • Amber  — height risk, smoking
- *  • Green  — person with full PPE compliance
+ *  • Cyan  — person with full PPE compliance (filtered out by default)
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type Detection = {
   label: string;
-  /** [y_min, x_min, y_max, x_max] normalised 0–1000 */
+  /** [x_min, y_min, x_max, y_max] normalised 0–1000, (0,0) = top-left */
   bbox: [number, number, number, number];
   description?: string;
 };
@@ -33,7 +37,7 @@ const BOX_COLORS: Record<string, string> = {
   machine_proximity:  "#f97316",
   working_at_height:  "#eab308",
   person_fallen:      "#dc2626",
-  safety_hazard:      "#ef4444",
+  // safety_hazard intentionally excluded — general warnings never get a bbox
 };
 
 const LABEL_TEXT: Record<string, string> = {
@@ -46,7 +50,6 @@ const LABEL_TEXT: Record<string, string> = {
   machine_proximity:  "⚙ Machinery",
   working_at_height:  "⬆ Height Risk",
   person_fallen:      "🚨 FALLEN",
-  safety_hazard:      "⚠ Hazard",
 };
 
 const PERSON_LABELS = new Set([
@@ -72,57 +75,41 @@ const ALWAYS_RENDER_LABELS = new Set([
 ]);
 
 function tightenBoxForDisplay(det: Detection, bbox: [number, number, number, number]): [number, number, number, number] {
-  let [yMin, xMin, yMax, xMax] = bbox;
+  let [xMin, yMin, xMax, yMax] = bbox;
 
-  // Gemini's person/PPE boxes are often slightly loose and include surrounding
+  // VLM person/PPE boxes are often slightly loose and include surrounding
   // context. Tighten them for display so the overlay sits more cleanly on the worker.
   if (PERSON_LABELS.has(det.label)) {
-    const h = yMax - yMin;
     const w = xMax - xMin;
+    const h = yMax - yMin;
     xMin += w * 0.08;
     xMax -= w * 0.08;
     yMin += h * 0.12;
     yMax -= h * 0.04;
   }
 
-  return [yMin, xMin, yMax, xMax];
+  return [xMin, yMin, xMax, yMax];
 }
 
 function normalizeBBox(det: Detection): [number, number, number, number] {
-  let [yMin, xMin, yMax, xMax] = det.bbox;
+  let [xMin, yMin, xMax, yMax] = det.bbox;
 
   // Auto-detect if the model returned 0–1 instead of 0–1000 and scale up.
-  const maxVal = Math.max(yMin, xMin, yMax, xMax);
+  const maxVal = Math.max(xMin, yMin, xMax, yMax);
   const scale = maxVal <= 1.5 ? 1000 : 1;
-  yMin *= scale; xMin *= scale; yMax *= scale; xMax *= scale;
+  xMin *= scale; yMin *= scale; xMax *= scale; yMax *= scale;
 
   const clamp = (v: number) => Math.max(0, Math.min(1000, v));
-  [yMin, xMin, yMax, xMax] = [clamp(yMin), clamp(xMin), clamp(yMax), clamp(xMax)];
+  [xMin, yMin, xMax, yMax] = [clamp(xMin), clamp(yMin), clamp(xMax), clamp(yMax)];
 
-  return tightenBoxForDisplay(det, [yMin, xMin, yMax, xMax]);
+  return tightenBoxForDisplay(det, [xMin, yMin, xMax, yMax]);
 }
 
-function shouldRenderDetection(det: Detection, bbox: [number, number, number, number]): boolean {
+function shouldRenderDetection(det: Detection): boolean {
+  // Never draw a bbox for person_ok (no violation) or safety_hazard (general warning).
   if (NON_VIOLATION_LABELS.has(det.label)) return false;
-  if (ALWAYS_RENDER_LABELS.has(det.label)) return true;
-
-  const [yMin, xMin, yMax, xMax] = bbox;
-  const w = xMax - xMin;
-  const h = yMax - yMin;
-  const areaRatio = (w * h) / 1_000_000;
-  const aspect = h > 0 ? w / h : 999;
-
-  if (det.label === "safety_hazard") {
-    // Keep only compact, localised hazards. Broad scene-level hazard warnings
-    // should remain in text but not draw a misleading box.
-    if (w < 36 || h < 36) return false;
-    if (areaRatio < 0.003) return false;
-    if (areaRatio > 0.18) return false;
-    if (aspect > 3.2 || aspect < 0.3) return false;
-    return true;
-  }
-
-  return true;
+  if (det.label === "safety_hazard") return false;
+  return ALWAYS_RENDER_LABELS.has(det.label);
 }
 
 function drawBoxes(
@@ -173,7 +160,7 @@ function drawBoxes(
   // ─────────────────────────────────────────────────────────────────────────
 
   for (const det of detections) {
-    const [yMin, xMin, yMax, xMax] = normalizeBBox(det);
+    const [xMin, yMin, xMax, yMax] = normalizeBBox(det);
 
     // Map 0-1000 normalised coords into the content area
     const x1 = offsetX + (xMin / 1000) * contentW;
@@ -221,13 +208,15 @@ type Props = {
   /** Extra CSS classes for the outer wrapper */
   className?: string;
   showLegend?: boolean;
+  /** Optional max-height applied directly to the image (e.g. "480px") */
+  maxHeight?: string;
 };
 
-export function BoundingBoxCanvas({ imageUrl, detections, className = "", showLegend = true }: Props) {
+export function BoundingBoxCanvas({ imageUrl, detections, className = "", showLegend = true, maxHeight }: Props) {
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [imgLoaded, setImgLoaded] = useState(false);
-  const visibleDetections = detections.filter((det) => shouldRenderDetection(det, normalizeBBox(det)));
+  const visibleDetections = detections.filter((det) => shouldRenderDetection(det));
 
   const redraw = useCallback(() => {
     if (!canvasRef.current || !imgRef.current || !imgLoaded) return;
@@ -253,14 +242,14 @@ export function BoundingBoxCanvas({ imageUrl, detections, className = "", showLe
 
   return (
     <div className={`w-full ${className}`}>
-      <div className="relative inline-block w-full">
+      <div className="relative block w-full">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           ref={imgRef}
           src={imageUrl}
           alt="Evidence"
           className="block w-full rounded border"
-          style={{ objectFit: "contain" }}
+          style={{ objectFit: "contain", maxHeight: maxHeight ?? "none", display: "block" }}
           onLoad={() => setImgLoaded(true)}
         />
         {/* Canvas must be positioned against the image-only wrapper.

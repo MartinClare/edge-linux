@@ -134,7 +134,7 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
 
     void refresh();
     snapshotTimerRef.current = setInterval(refresh, SNAPSHOT_INTERVAL_MS);
-  }, [clearSnapshotImage, snapshotFallbackUrl]);
+  }, [clearSnapshotImage, snapshotFallbackUrl, cameraId]);
 
   const stopSnapshot = useCallback(() => {
     if (snapshotTimerRef.current) {

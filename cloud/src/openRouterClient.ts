@@ -199,8 +199,8 @@ Return your output STRICTLY as valid JSON with this exact structure (no markdown
   "missingVests": 0,
   "detections": [
     {
-      "label": "person_ok" | "no_hardhat" | "no_vest" | "no_hardhat_no_vest" | "fire_smoke" | "smoking" | "machine_proximity" | "working_at_height" | "person_fallen" | "safety_hazard",
-      "bbox": [y_min, x_min, y_max, x_max],
+      "label": "no_hardhat" | "no_vest" | "no_hardhat_no_vest" | "fire_smoke" | "smoking" | "machine_proximity" | "working_at_height" | "person_fallen",
+      "bbox": [x_min, y_min, x_max, y_max],
       "description": "brief note e.g. worker on scaffold without harness"
     }
   ],
@@ -229,12 +229,11 @@ Return your output STRICTLY as valid JSON with this exact structure (no markdown
 - Person/PPE boxes must be TIGHT around the actual worker only: from the visible top of the head/helmet to the feet or lowest visible body part, and from the left-most to right-most visible body edges.
 - Do NOT include nearby machinery, poles, barriers, shadows, or empty surrounding space in a person/PPE box.
 - If a worker is tiny, far away, or the resulting box would be very small/loose on a wide view, omit the bbox entirely.
-- For EACH hazard found in STEP 4 add one entry: label is "fire_smoke", "smoking", "machine_proximity", "working_at_height", "person_fallen", or "safety_hazard".
-- Hazard boxes must also be tight and specific. Do NOT draw a huge box covering a broad area when you cannot isolate the actual hazard location.
-- For \`safety_hazard\`, only emit a bbox when the hazard is visually localised to a specific object/spot (for example a spill, exposed edge, blocked opening, unsecured item, or clearly isolated obstruction).
-- If the hazard is only a general scene condition and you cannot localise it precisely, keep it in the text description only and emit NO \`safety_hazard\` bbox.
-- "bbox" must be [y_min, x_min, y_max, x_max] with integer values 0–1000 (normalized image coordinates).
-- Always include a brief "description" — especially for "safety_hazard" (explain what hazard was found).
+- For EACH specific hazard found in STEP 4, add one entry with label: "fire_smoke", "smoking", "machine_proximity", "working_at_height", or "person_fallen".
+- Hazard boxes must be tight and specific. Do NOT draw a huge box covering a broad area.
+- Do NOT emit a \`safety_hazard\` detection or any bbox for general scene-level warnings — describe those in the text fields only.
+- "bbox" must be [x_min, y_min, x_max, y_max] with integer values 0–1000 where (0,0) is the top-left corner of the image.
+- Always include a brief "description" for each detection.
 - If nothing is visible, set "detections" to [].
 
 **CRITICAL: Only identify missing PPE when visibility is sufficient:**
@@ -363,8 +362,8 @@ Return STRICT JSON (no markdown):
   "missingVests": 0,
   "detections": [
     {
-      "label": "person_ok" | "no_hardhat" | "no_vest" | "no_hardhat_no_vest" | "fire_smoke" | "smoking" | "machine_proximity" | "working_at_height" | "person_fallen" | "safety_hazard",
-      "bbox": [y_min, x_min, y_max, x_max],
+      "label": "no_hardhat" | "no_vest" | "no_hardhat_no_vest" | "fire_smoke" | "smoking" | "machine_proximity" | "working_at_height" | "person_fallen",
+      "bbox": [x_min, y_min, x_max, y_max],
       "description": "brief note"
     }
   ],
@@ -389,11 +388,9 @@ Return STRICT JSON (no markdown):
 - For machine too close to person: label "machine_proximity" (box around both).
 - For unsafe height work: label "working_at_height" (box around the worker).
 - For fallen person: label "person_fallen" (box around them).
-- For any other hazard: label "safety_hazard" with description explaining the risk.
-- Hazard boxes must also be tight and specific. Do NOT draw a huge box covering a broad area when you cannot isolate the actual hazard location.
-- For \`safety_hazard\`, only emit a bbox when the hazard is visually localised to a specific object/spot.
-- If the hazard is only a general scene condition and you cannot localise it precisely, keep it in the text description only and emit NO \`safety_hazard\` bbox.
-- bbox: [y_min, x_min, y_max, x_max] integers 0–1000.
+- Do NOT emit a \`safety_hazard\` detection or bbox for general scene-level warnings — describe those in the alerts array instead.
+- Hazard boxes must be tight and specific. Do NOT draw a huge box covering a broad area.
+- bbox: [x_min, y_min, x_max, y_max] integers 0–1000 where (0,0) is the top-left corner of the image.
 - If nothing found, set "detections" to [].
 
 **CRITICAL: You MUST carefully count people and identify missing PPE:**

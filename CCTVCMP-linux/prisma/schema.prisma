@@ -63,26 +63,26 @@ enum ChannelType {
 }
 
 model User {
-  id             String        @id @default(cuid())
+  id             String   @id @default(cuid())
   name           String
-  email          String        @unique
-  hashedPassword String        @map("hashed_password")
-  role           Role          @default(viewer)
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  email          String   @unique
+  hashedPassword String   @map("hashed_password")
+  role           Role     @default(viewer)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  assignedIncidents Incident[]   @relation("IncidentAssignee")
+  assignedIncidents Incident[]    @relation("IncidentAssignee")
   incidentLogs      IncidentLog[]
 
   @@map("users")
 }
 
 model Project {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   name      String
   location  String
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   cameras      Camera[]
   zones        Zone[]
@@ -93,15 +93,15 @@ model Project {
 }
 
 model Camera {
-  id            String       @id @default(cuid())
-  name          String
-  edgeCameraId  String?      @unique @map("edge_camera_id")
-  streamUrl     String?      @map("stream_url")
-  projectId     String       @map("project_id")
-  zoneId        String?      @map("zone_id")
-  status        CameraStatus @default(online)
-  lastReportAt  DateTime?    @map("last_report_at")
-  createdAt     DateTime     @default(now()) @map("created_at")
+  id           String       @id @default(cuid())
+  name         String
+  edgeCameraId String?      @unique @map("edge_camera_id")
+  streamUrl    String?      @map("stream_url")
+  projectId    String       @map("project_id")
+  zoneId       String?      @map("zone_id")
+  status       CameraStatus @default(online)
+  lastReportAt DateTime?    @map("last_report_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
 
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   zone        Zone?        @relation(fields: [zoneId], references: [id], onDelete: SetNull)
@@ -117,7 +117,7 @@ model Zone {
   name      String
   riskLevel IncidentRiskLevel @map("risk_level")
 
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   cameras   Camera[]
   incidents Incident[]
 
@@ -129,6 +129,7 @@ model Incident {
   projectId      String            @map("project_id")
   cameraId       String            @map("camera_id")
   zoneId         String            @map("zone_id")
+  edgeReportId   String?           @map("edge_report_id")
   type           IncidentType
   riskLevel      IncidentRiskLevel @map("risk_level")
   status         IncidentStatus    @default(open)
@@ -144,6 +145,7 @@ model Incident {
   project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   camera           Camera            @relation(fields: [cameraId], references: [id], onDelete: Cascade)
   zone             Zone              @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  edgeReport       EdgeReport?       @relation(fields: [edgeReportId], references: [id], onDelete: SetNull)
   assignee         User?             @relation("IncidentAssignee", fields: [assignedTo], references: [id], onDelete: SetNull)
   logs             IncidentLog[]
   notificationLogs NotificationLog[]
@@ -181,32 +183,33 @@ model DailyMetric {
 }
 
 model EdgeReport {
-  id                 String   @id @default(cuid())
-  cameraId           String   @map("camera_id")
-  edgeCameraId       String   @map("edge_camera_id")
-  cameraName         String   @map("camera_name")
-  messageType        String   @default("analysis") @map("message_type")
-  keepalive          Boolean  @default(false)
-  eventImageIncluded Boolean  @default(false) @map("event_image_included")
-  eventImagePath     String?  @map("event_image_path")
-  eventImageMimeType String?  @map("event_image_mime_type")
-  eventImageData     Bytes?   @map("event_image_data")
-  eventTimestamp     DateTime? @map("event_timestamp")
-  overallRiskLevel   String   @map("overall_risk_level")
-  overallDescription String   @map("overall_description")
-  constructionSafety Json?    @map("construction_safety_json")
-  fireSafety         Json?    @map("fire_safety_json")
-  propertySecurity   Json?    @map("property_security_json")
-  peopleCount        Int?     @map("people_count")
-  missingHardhats    Int?     @map("missing_hardhats")
-  missingVests       Int?     @map("missing_vests")
-  rawJson                Json     @map("raw_json")
-  classificationJson     Json?    @map("classification_json")
-  cmpRiskLevel           String?  @map("cmp_risk_level")
-  visionVerificationJson Json?    @map("vision_verification_json")
-  receivedAt         DateTime @default(now()) @map("received_at")
+  id                     String    @id @default(cuid())
+  cameraId               String    @map("camera_id")
+  edgeCameraId           String    @map("edge_camera_id")
+  cameraName             String    @map("camera_name")
+  messageType            String    @default("analysis") @map("message_type")
+  keepalive              Boolean   @default(false)
+  eventImageIncluded     Boolean   @default(false) @map("event_image_included")
+  eventImagePath         String?   @map("event_image_path")
+  eventImageMimeType     String?   @map("event_image_mime_type")
+  eventImageData         Bytes?    @map("event_image_data")
+  eventTimestamp         DateTime? @map("event_timestamp")
+  overallRiskLevel       String    @map("overall_risk_level")
+  overallDescription     String    @map("overall_description")
+  constructionSafety     Json?     @map("construction_safety_json")
+  fireSafety             Json?     @map("fire_safety_json")
+  propertySecurity       Json?     @map("property_security_json")
+  peopleCount            Int?      @map("people_count")
+  missingHardhats        Int?      @map("missing_hardhats")
+  missingVests           Int?      @map("missing_vests")
+  rawJson                Json      @map("raw_json")
+  classificationJson     Json?     @map("classification_json")
+  cmpRiskLevel           String?   @map("cmp_risk_level")
+  visionVerificationJson Json?     @map("vision_verification_json")
+  receivedAt             DateTime  @default(now()) @map("received_at")
 
-  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  camera    Camera     @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  incidents Incident[]
 
   @@index([cameraId])
   @@index([receivedAt])

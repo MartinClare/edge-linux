@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef, useRef } from 'react';
 import RTSPLiveStream from './RTSPLiveStream';
 import GeminiPpeNarrative from './GeminiPpeNarrative';
 import SettingsModal from './SettingsModal';
@@ -98,6 +98,18 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
     alert: AlertAnalysisResult | null;
   }>>({});
 
+  // Track which cameras have had their result popup auto-dismissed (60s timer)
+  const [resultDismissed, setResultDismissed] = useState<Record<string, boolean>>({});
+  const resultTimerRefs = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  // Cleanup all pending auto-dismiss timers on unmount
+  useEffect(() => {
+    const timers = resultTimerRefs.current;
+    return () => { Object.values(timers).forEach(clearTimeout); };
+  }, []);
+
+  const RESULT_AUTO_DISMISS_MS = 60_000;
+
 
   // Rotate to next enabled camera for Deep Vision analysis
   useEffect(() => {
@@ -156,10 +168,19 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
       console.log(`[MultiCamera] 💾 Updated cameraResults for ${cameraId}:`, updated[cameraId]);
       return updated;
     });
+
+    // Show popup and reset 60s auto-dismiss timer
+    if (result) {
+      setResultDismissed(prev => ({ ...prev, [cameraId]: false }));
+      if (resultTimerRefs.current[cameraId]) clearTimeout(resultTimerRefs.current[cameraId]);
+      resultTimerRefs.current[cameraId] = setTimeout(() => {
+        setResultDismissed(prev => ({ ...prev, [cameraId]: true }));
+      }, RESULT_AUTO_DISMISS_MS);
+    }
     
     // Also notify parent
     onGeminiResult?.(cameraId, cameraName, result);
-  }, [onGeminiResult, enabledCameras, cameraNames]);
+  }, [onGeminiResult, enabledCameras, cameraNames, RESULT_AUTO_DISMISS_MS]);
 
   const handleAlertResult = useCallback((cameraId: string, result: AlertAnalysisResult | null) => {
     // Find camera name to pass along with result
@@ -176,10 +197,19 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
       console.log(`[MultiCamera] 💾 Updated cameraResults for ${cameraId}:`, updated[cameraId]);
       return updated;
     });
+
+    // Show popup and reset 60s auto-dismiss timer
+    if (result) {
+      setResultDismissed(prev => ({ ...prev, [cameraId]: false }));
+      if (resultTimerRefs.current[cameraId]) clearTimeout(resultTimerRefs.current[cameraId]);
+      resultTimerRefs.current[cameraId] = setTimeout(() => {
+        setResultDismissed(prev => ({ ...prev, [cameraId]: true }));
+      }, RESULT_AUTO_DISMISS_MS);
+    }
     
     // Also notify parent
     onAlertResult?.(cameraId, cameraName, result);
-  }, [onAlertResult, enabledCameras, cameraNames]);
+  }, [onAlertResult, enabledCameras, cameraNames, RESULT_AUTO_DISMISS_MS]);
 
   useEffect(() => {
     let cancelled = false;
@@ -419,10 +449,58 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
           onGeminiResult={(result) => handleGeminiResult(camera.id, result)}
           onAlertResult={(result) => handleAlertResult(camera.id, result)}
         />
+
+        {/* Corner alert badge — shown persistently once there is a result, even after popup is dismissed */}
+        {(geminiResult || alertResult) && resultDismissed[camera.id] && (() => {
+          const alertCount = alertResult?.alertCount ?? 0;
+          const issueCount = geminiResult
+            ? (geminiResult.constructionSafety?.issues?.length ?? 0)
+              + (geminiResult.fireSafety?.issues?.length ?? 0)
+              + (geminiResult.propertySecurity?.issues?.length ?? 0)
+            : 0;
+          const count = alertCount || issueCount;
+          const riskLevel = alertResult?.overallRiskLevel ?? geminiResult?.overallRiskLevel ?? 'Low';
+          const badgeColor = riskLevel === 'High' ? '#e94560'
+            : riskLevel === 'Medium' ? '#ff9800' : '#4caf50';
+          return (
+            <button
+              onClick={() => {
+                setResultDismissed(prev => ({ ...prev, [camera.id]: false }));
+                if (resultTimerRefs.current[camera.id]) clearTimeout(resultTimerRefs.current[camera.id]);
+                resultTimerRefs.current[camera.id] = setTimeout(() => {
+                  setResultDismissed(prev => ({ ...prev, [camera.id]: true }));
+                }, RESULT_AUTO_DISMISS_MS);
+              }}
+              title="Click to show analysis details"
+              style={{
+                position: 'absolute',
+                bottom: '0.6rem',
+                right: '0.6rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '0.3rem 0.65rem',
+                background: `rgba(0,0,0,0.75)`,
+                border: `2px solid ${badgeColor}`,
+                borderRadius: '20px',
+                color: badgeColor,
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                zIndex: 10,
+                backdropFilter: 'blur(4px)',
+                boxShadow: `0 2px 8px rgba(0,0,0,0.5), 0 0 8px ${badgeColor}55`,
+              }}
+            >
+              <span style={{ fontSize: '1rem' }}>🔔</span>
+              <span>{count > 0 ? count : riskLevel}</span>
+            </button>
+          );
+        })()}
         
-        {/* Full Detailed Results Display — always shown when results exist */}
+        {/* Full Detailed Results Display — shown when results exist AND not yet dismissed */}
         {(() => {
-          const shouldShow = !!(geminiResult || alertResult);
+          const shouldShow = !!(geminiResult || alertResult) && !resultDismissed[camera.id];
           return shouldShow ? (
           <div style={{
             marginTop: '0.75rem',
