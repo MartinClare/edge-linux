@@ -169,6 +169,12 @@ function normalizeEdgeWebhookPayload(raw: unknown): unknown {
   };
 }
 
+const deviceStatusSchema = z
+  .object({
+    streamHealthy: z.boolean(),
+  })
+  .optional();
+
 export const edgeReportSchema = z.preprocess(
   normalizeEdgeWebhookPayload,
   z
@@ -181,6 +187,8 @@ export const edgeReportSchema = z.preprocess(
       keepalive: z.boolean().default(false),
       eventImageIncluded: z.boolean().default(false),
       analysis: analysisSchema.optional(),
+      /** Health status of the edge device's stream for this camera. */
+      deviceStatus: deviceStatusSchema,
     })
     .superRefine((val, ctx) => {
       const isKeepalive = val.keepalive || val.messageType === "keepalive";

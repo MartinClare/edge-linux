@@ -33,11 +33,15 @@ export async function verifyToken(token: string) {
   return payload as unknown as JwtPayload;
 }
 
+// Only require HTTPS cookies when explicitly configured (e.g. behind a TLS proxy).
+// Running locally over plain HTTP (Tailscale, LAN) must use secure: false.
+const SECURE_COOKIE = process.env.SECURE_COOKIE === "true";
+
 export function setAuthCookie(response: NextResponse, token: string) {
   response.cookies.set(AUTH_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    secure: SECURE_COOKIE,
+    sameSite: "lax",
     maxAge: 60 * 60 * 24 * 7,
     path: "/",
   });
@@ -46,8 +50,8 @@ export function setAuthCookie(response: NextResponse, token: string) {
 export function clearAuthCookie(response: NextResponse) {
   response.cookies.set(AUTH_COOKIE_NAME, "", {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    secure: SECURE_COOKIE,
+    sameSite: "lax",
     expires: new Date(0),
     path: "/",
   });

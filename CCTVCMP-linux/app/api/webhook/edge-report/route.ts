@@ -5,6 +5,18 @@ import { edgeReportSchema } from "@/lib/validations/webhook";
 import { classifyAnalysis } from "@/lib/llm-classifier";
 import { evaluateAlarms, ensureDefaultRules } from "@/lib/alarm-engine";
 import { verifyWithVision, reconcileClassifications } from "@/lib/vision-verifier";
+import { writeFile, mkdir } from "fs/promises";
+import { join } from "path";
+
+const IMAGE_DIR = process.env.IMAGE_STORAGE_PATH ?? join(process.cwd(), "..", "data", "images");
+
+async function saveImageToDisk(reportId: string, bytes: Buffer, mimeType: string): Promise<string> {
+  await mkdir(IMAGE_DIR, { recursive: true });
+  const ext = mimeType === "image/png" ? "png" : "jpg";
+  const filename = `${reportId}.${ext}`;
+  await writeFile(join(IMAGE_DIR, filename), bytes);
+  return `/api/edge-reports/${reportId}/image`;
+}
 
 // ── LLM rate limiting ─────────────────────────────────────────────────────────
 //
@@ -342,6 +354,7 @@ export async function POST(request: NextRequest) {
       keepalive,
       eventImageIncluded,
       analysis,
+      deviceStatus,
     } = parsed.data;
 
     // edge-linux Python sends JSON only (no multipart). Only reject if client explicitly
@@ -392,7 +405,6 @@ export async function POST(request: NextRequest) {
         keepalive,
         eventImageIncluded: eventImageIncluded || !!parsedBody.image,
         eventImageMimeType: parsedBody.image?.mimeType ?? null,
-        eventImageData: parsedBody.image?.bytes ?? null,
         eventTimestamp,
         overallRiskLevel: analysis?.overallRiskLevel ?? "Low",
         overallDescription:
@@ -408,19 +420,28 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (parsedBody.image) {
+    if (parsedBody.image?.bytes) {
+      const imagePath = await saveImageToDisk(
+        edgeReport.id,
+        parsedBody.image.bytes,
+        parsedBody.image.mimeType ?? "image/jpeg"
+      );
       await prisma.edgeReport.update({
         where: { id: edgeReport.id },
-        data: { eventImagePath: `/api/edge-reports/${edgeReport.id}/image` },
+        data: { eventImagePath: imagePath },
       });
     }
 
     // --- 2. Update Camera.lastReportAt and sync current edge metadata ---
+    // If the edge reports a stream health problem, mark the camera as "degraded"
+    // (yellow light in the UI) rather than "online" (green).
+    const cameraStatus =
+      deviceStatus?.streamHealthy === false ? "degraded" : "online";
     await prisma.camera.update({
       where: { id: camera.id },
       data: {
         lastReportAt: new Date(),
-        status: "online",
+        status: cameraStatus,
         name: cameraName || camera.name,
         streamUrl: normalizedStreamUrl ?? camera.streamUrl,
       },

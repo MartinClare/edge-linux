@@ -12,7 +12,7 @@
  *  4. Exposes the go2rtc API base URL so the PPE-UI knows where to connect.
  */
 
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -115,8 +115,20 @@ export function startGo2RTC(streams: Record<string, string>): void {
     return;
   }
 
+  // Kill any stale go2rtc processes left over from a previous (unclean) run.
+  // This prevents "address already in use" errors on port 1984.
+  // Set lastStreams immediately so warmup's updateGo2RTCStreams() won't spawn a second instance.
   shouldRun = true;
   lastStreams = streams;
+
+  const killed = spawnSync('pkill', ['-f', 'go2rtc'], { timeout: 3_000 });
+  if (killed.status === 0) {
+    console.log('[go2rtc] Killed stale go2rtc process(es) before starting');
+    // Give the OS a moment to release the port before binding
+    setTimeout(() => { if (shouldRun) doStart(binary, streams); }, 1_500);
+    return;
+  }
+
   doStart(binary, streams);
 }
 

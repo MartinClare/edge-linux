@@ -108,14 +108,12 @@ export default async function EdgeReportDetailPage({ params }: Props) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Overall Description</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm whitespace-pre-wrap">{report.overallDescription || "No description."}</p>
-        </CardContent>
-      </Card>
+      {/* CMP Overall Conclusion — derived from classificationJson + visionVerificationJson */}
+      <CmpConclusionCard
+        classificationJson={report.classificationJson}
+        visionVerificationJson={report.visionVerificationJson}
+        cmpRiskLevel={report.cmpRiskLevel}
+      />
 
       <Card>
         <CardHeader>
@@ -173,6 +171,16 @@ export default async function EdgeReportDetailPage({ params }: Props) {
       {report.visionVerificationJson && (
         <VisionVerificationCard data={report.visionVerificationJson} />
       )}
+
+      {/* Edge original description — secondary reference */}
+      <Card className="border-muted/40">
+        <CardHeader>
+          <CardTitle className="text-sm text-muted-foreground">Edge Original Description</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm whitespace-pre-wrap text-muted-foreground">{report.overallDescription || "No description."}</p>
+        </CardContent>
+      </Card>
 
       <div>
         <Link href="/incidents" className="text-sm text-primary hover:underline">
@@ -284,6 +292,109 @@ function VisionVerificationCard({ data }: { data: unknown }) {
         )}
         {detected.length === 0 && !v.missedHazards?.length && !v.incorrectClaims?.length && (
           <p className="text-muted-foreground text-xs">Vision model found no additional issues.</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+type ClassificationItem = {
+  type: string;
+  detected: boolean;
+  riskLevel: string;
+  confidence: number;
+  reasoning: string;
+};
+
+function CmpConclusionCard({
+  classificationJson,
+  visionVerificationJson,
+  cmpRiskLevel,
+}: {
+  classificationJson: unknown;
+  visionVerificationJson: unknown;
+  cmpRiskLevel: string | null;
+}) {
+  const cls = classificationJson as { classifications?: ClassificationItem[]; source?: string; classifierModel?: string } | null;
+  const vv = visionVerificationJson as VisionVerification | null;
+
+  const detected = (cls?.classifications ?? []).filter((c) => c.detected);
+  const source = cls?.source ?? "llm";
+  const model = cls?.classifierModel;
+
+  // Build a prose summary from detected incidents
+  let proseSummary = "";
+  if (detected.length === 0) {
+    proseSummary = "CMP analysis found no safety incidents in this report.";
+  } else {
+    const parts = detected.map(
+      (c) => `${c.type.replace(/_/g, " ")} (${c.riskLevel}, ${Math.round(c.confidence * 100)}% confidence)`
+    );
+    proseSummary = `CMP identified the following incident${detected.length > 1 ? "s" : ""}: ${parts.join("; ")}.`;
+  }
+
+  // Append vision summary if available
+  const visionSummary = vv?.summary?.trim();
+  if (visionSummary) {
+    proseSummary += ` Vision assessment: ${visionSummary}`;
+  }
+
+  // Append corrections from vision verifier
+  const missed = vv?.missedHazards ?? [];
+  const incorrect = vv?.incorrectClaims ?? [];
+  if (missed.length > 0) {
+    proseSummary += ` Additional hazards identified by CMP vision: ${missed.join("; ")}.`;
+  }
+  if (incorrect.length > 0) {
+    proseSummary += ` Edge claims not confirmed by CMP: ${incorrect.join("; ")}.`;
+  }
+
+  return (
+    <Card className="border-primary/30 bg-primary/5">
+      <CardHeader>
+        <CardTitle className="text-sm flex items-center gap-2">
+          CMP Overall Conclusion
+          {cmpRiskLevel && (
+            <Badge variant={riskBadgeVariant(cmpRiskLevel)} className="ml-1">
+              {cmpRiskLevel}
+            </Badge>
+          )}
+          {source === "vision" && (
+            <span className="text-xs text-muted-foreground font-normal">· text + image verified</span>
+          )}
+          {source === "llm" && (
+            <span className="text-xs text-muted-foreground font-normal">· text analysis</span>
+          )}
+        </CardTitle>
+        {model && (
+          <p className="text-xs text-muted-foreground">Model: {model}</p>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
+        <p className="whitespace-pre-wrap leading-relaxed">{proseSummary}</p>
+
+        {detected.length > 0 && (
+          <div className="space-y-2 pt-1 border-t border-border/40">
+            <p className="text-xs uppercase tracking-wide text-muted-foreground">Detected incidents</p>
+            {detected.map((c, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <Badge variant={riskBadgeVariant(c.riskLevel)} className="shrink-0 text-xs mt-0.5">
+                  {c.riskLevel}
+                </Badge>
+                <div>
+                  <span className="font-medium">{c.type.replace(/_/g, " ")}</span>
+                  <span className="text-muted-foreground ml-2 text-xs">({Math.round(c.confidence * 100)}%)</span>
+                  {c.reasoning && (
+                    <p className="text-muted-foreground text-xs mt-0.5">{c.reasoning}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!classificationJson && (
+          <p className="text-muted-foreground text-xs">CMP has not yet processed this report.</p>
         )}
       </CardContent>
     </Card>

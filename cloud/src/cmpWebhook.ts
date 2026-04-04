@@ -50,6 +50,7 @@ export function buildKeepalivePayload(
   cameraId: string,
   cameraName: string,
   streamUrl?: string,
+  streamHealthy?: boolean,
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     edgeCameraId: cameraId,
@@ -57,6 +58,7 @@ export function buildKeepalivePayload(
     timestamp: utcIsoTimestamp(),
     messageType: 'keepalive',
     keepalive: true,
+    deviceStatus: { streamHealthy: streamHealthy ?? true },
   };
   if (streamUrl) payload.streamUrl = streamUrl;
   return payload;
@@ -68,6 +70,7 @@ export function buildAnalysisReportPayload(
   analysis: SafetyAnalysisResult,
   streamUrl?: string,
   includeImage = false,
+  streamHealthy = true,
 ): Record<string, unknown> {
   const analysisObj: Record<string, unknown> = {
     overallDescription: analysis.overallDescription || '',
@@ -89,6 +92,7 @@ export function buildAnalysisReportPayload(
     timestamp: utcIsoTimestamp(),
     eventImageIncluded: includeImage,
     analysis: analysisObj,
+    deviceStatus: { streamHealthy },
   };
   if (streamUrl) payload.streamUrl = streamUrl;
   return payload;

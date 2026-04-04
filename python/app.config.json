@@ -67,6 +67,7 @@
   "centralServer": {
     "enabled": true,
     "url": "http://localhost:3002/api/webhook/edge-report",
+    "cloudUrl": "https://cctvcmpchev.vercel.app/api/webhook/edge-report",
     "apiKey": "axonedge852852",
     "vercelBypassToken": "DgDk0ncqfYOMOcldWHi1McwSWSiaqTpX"
   },

@@ -71,9 +71,24 @@ type Report = {
   fireSafety: unknown;
   propertySecurity: unknown;
   classificationJson: unknown;
+  visionVerificationJson: unknown;
   /** Full webhook payload; contains analysis.detections (bounding boxes). */
   rawJson: unknown;
 };
+
+function buildCmpDescription(classificationJson: unknown, visionVerificationJson: unknown): string {
+  const cls = classificationJson as { classifications?: Array<{ type: string; detected: boolean; riskLevel: string; confidence: number }> } | null;
+  const vv = visionVerificationJson as { summary?: string; missedHazards?: string[]; incorrectClaims?: string[] } | null;
+  const detected = (cls?.classifications ?? []).filter((c) => c.detected);
+  if (detected.length === 0 && !vv?.summary) return "";
+  let text = detected.length === 0
+    ? "CMP found no safety incidents."
+    : `CMP identified: ${detected.map((c) => `${c.type.replace(/_/g, " ")} (${c.riskLevel}, ${Math.round(c.confidence * 100)}%)`).join("; ")}.`;
+  if (vv?.summary) text += ` ${vv.summary}`;
+  if (vv?.missedHazards?.length) text += ` Missed by edge: ${vv.missedHazards.join("; ")}.`;
+  if (vv?.incorrectClaims?.length) text += ` Not confirmed: ${vv.incorrectClaims.join("; ")}.`;
+  return text;
+}
 
 type FilterMode = "all" | "analysis" | "alerts";
 
@@ -173,8 +188,10 @@ function ReportCard({ report }: { report: Report }) {
               </span>
             </div>
 
-            {/* Description */}
-            <p className="text-sm leading-relaxed line-clamp-2">{report.overallDescription || "No description."}</p>
+            {/* Description — CMP conclusion when available, fallback to edge description */}
+            <p className="text-sm leading-relaxed line-clamp-2">
+              {buildCmpDescription(report.classificationJson, report.visionVerificationJson) || report.overallDescription || "No description."}
+            </p>
 
 
             {/* Critical incident type badges */}

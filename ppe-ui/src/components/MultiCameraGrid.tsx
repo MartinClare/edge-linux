@@ -18,6 +18,7 @@ interface CameraConfig {
 interface CentralServerConfig {
   enabled: boolean;
   url: string;
+  cloudUrl?: string;
   apiKey?: string;
 }
 
@@ -502,7 +503,7 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
             background: 'linear-gradient(135deg, rgba(106, 27, 154, 0.15) 0%, rgba(156, 39, 176, 0.15) 100%)',
             border: '2px solid rgba(156, 39, 176, 0.4)',
             borderRadius: '8px',
-            fontSize: '0.85rem'
+            fontSize: '0.92rem'
           }}>
             {geminiResult && (
               <>
@@ -517,7 +518,7 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                     <span style={{ fontSize: '1.5rem' }}>🤖</span>
                     <strong style={{ color: '#e1bee7', fontSize: '1rem' }}>Deep Vision AI Analysis</strong>
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)' }}>
+                  <div style={{ fontSize: '0.92rem', color: 'rgba(255,255,255,0.6)' }}>
                     Comprehensive AI-powered safety assessment
                   </div>
                 </div>
@@ -539,13 +540,13 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                      geminiResult.overallRiskLevel === 'Medium' ? '🟡' : '🟢'}
                   </span>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.8rem', color: 'rgba(255,255,255,0.8)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.92rem', color: 'rgba(255,255,255,0.8)' }}>
                       Risk Level: <span style={{
                         color: geminiResult.overallRiskLevel === 'High' ? '#e94560' :
                                geminiResult.overallRiskLevel === 'Medium' ? '#ff9800' : '#4caf50'
                       }}>{geminiResult.overallRiskLevel}</span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', marginTop: '0.25rem' }}>
+                    <div style={{ fontSize: '0.92rem', color: 'rgba(255,255,255,0.75)', marginTop: '0.25rem', lineHeight: '1.5' }}>
                       {geminiResult.overallDescription}
                     </div>
                   </div>
@@ -575,15 +576,15 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                       color: '#ffa726'
                     }}>
                       <span>🏗️</span>
-                      <span style={{ fontSize: '0.85rem' }}>Construction Safety</span>
+                      <span style={{ fontSize: '0.92rem' }}>Construction Safety</span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)', marginBottom: '0.5rem' }}>
+                    <div style={{ fontSize: '0.92rem', color: 'rgba(255,255,255,0.85)', marginBottom: '0.5rem', lineHeight: '1.5' }}>
                       {geminiResult.constructionSafety.summary}
                     </div>
                     {geminiResult.constructionSafety.issues && geminiResult.constructionSafety.issues.length > 0 && (
                       <div style={{ marginTop: '0.5rem' }}>
                         <div style={{ 
-                          fontSize: '0.75rem', 
+                          fontSize: '0.92rem', 
                           fontWeight: 600, 
                           color: '#e94560',
                           marginBottom: '0.25rem'
@@ -593,11 +594,12 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                         <ul style={{ 
                           margin: '0', 
                           paddingLeft: '1.2rem', 
-                          fontSize: '0.7rem',
-                          color: 'rgba(255,255,255,0.7)'
+                          fontSize: '0.88rem',
+                          color: 'rgba(255,255,255,0.8)',
+                          lineHeight: '1.6'
                         }}>
                           {geminiResult.constructionSafety.issues.map((issue, i) => (
-                            <li key={i} style={{ marginBottom: '0.2rem' }}>{issue}</li>
+                            <li key={i} style={{ marginBottom: '0.3rem' }}>{issue}</li>
                           ))}
                         </ul>
                       </div>
@@ -623,15 +625,15 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                       color: '#ff7043'
                     }}>
                       <span>🔥</span>
-                      <span style={{ fontSize: '0.85rem' }}>Fire Safety</span>
+                      <span style={{ fontSize: '0.92rem' }}>Fire Safety</span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)', marginBottom: '0.5rem' }}>
+                    <div style={{ fontSize: '0.92rem', color: 'rgba(255,255,255,0.85)', marginBottom: '0.5rem', lineHeight: '1.5' }}>
                       {geminiResult.fireSafety.summary}
                     </div>
                     {geminiResult.fireSafety.issues && geminiResult.fireSafety.issues.length > 0 && (
                       <div style={{ marginTop: '0.5rem' }}>
                         <div style={{ 
-                          fontSize: '0.75rem', 
+                          fontSize: '0.92rem', 
                           fontWeight: 600, 
                           color: '#e94560',
                           marginBottom: '0.25rem'
@@ -641,11 +643,12 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                         <ul style={{ 
                           margin: '0', 
                           paddingLeft: '1.2rem', 
-                          fontSize: '0.7rem',
-                          color: 'rgba(255,255,255,0.7)'
+                          fontSize: '0.88rem',
+                          color: 'rgba(255,255,255,0.8)',
+                          lineHeight: '1.6'
                         }}>
                           {geminiResult.fireSafety.issues.map((issue, i) => (
-                            <li key={i} style={{ marginBottom: '0.2rem' }}>{issue}</li>
+                            <li key={i} style={{ marginBottom: '0.3rem' }}>{issue}</li>
                           ))}
                         </ul>
                       </div>
@@ -670,15 +673,15 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                       color: '#42a5f5'
                     }}>
                       <span>🔒</span>
-                      <span style={{ fontSize: '0.85rem' }}>Property Security</span>
+                      <span style={{ fontSize: '0.92rem' }}>Property Security</span>
                     </div>
-                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)', marginBottom: '0.5rem' }}>
+                    <div style={{ fontSize: '0.92rem', color: 'rgba(255,255,255,0.85)', marginBottom: '0.5rem', lineHeight: '1.5' }}>
                       {geminiResult.propertySecurity.summary}
                     </div>
                     {geminiResult.propertySecurity.issues && geminiResult.propertySecurity.issues.length > 0 && (
                       <div style={{ marginTop: '0.5rem' }}>
                         <div style={{ 
-                          fontSize: '0.75rem', 
+                          fontSize: '0.92rem', 
                           fontWeight: 600, 
                           color: '#e94560',
                           marginBottom: '0.25rem'
@@ -688,11 +691,12 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                         <ul style={{ 
                           margin: '0', 
                           paddingLeft: '1.2rem', 
-                          fontSize: '0.7rem',
-                          color: 'rgba(255,255,255,0.7)'
+                          fontSize: '0.88rem',
+                          color: 'rgba(255,255,255,0.8)',
+                          lineHeight: '1.6'
                         }}>
                           {geminiResult.propertySecurity.issues.map((issue, i) => (
-                            <li key={i} style={{ marginBottom: '0.2rem' }}>{issue}</li>
+                            <li key={i} style={{ marginBottom: '0.3rem' }}>{issue}</li>
                           ))}
                         </ul>
                       </div>
@@ -714,7 +718,7 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                   <span style={{ 
                     padding: '0.2rem 0.5rem',
                     borderRadius: '12px',
-                    fontSize: '0.75rem',
+                    fontSize: '0.92rem',
                     fontWeight: 600,
                     background: alertResult.alertCount > 0 ? 'rgba(233, 69, 96, 0.2)' : 'rgba(76, 175, 80, 0.2)',
                     color: alertResult.alertCount > 0 ? '#e94560' : '#4caf50'
@@ -723,14 +727,15 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                   </span>
                 </div>
                 {alertResult.alerts && alertResult.alerts.length > 0 && (
-                  <div style={{ fontSize: '0.75rem' }}>
+                  <div style={{ fontSize: '0.92rem' }}>
                     {alertResult.alerts.slice(0, 2).map((alert, i) => (
                       <div key={i} style={{ 
                         marginTop: '0.3rem',
-                        padding: '0.3rem 0.5rem',
+                        padding: '0.4rem 0.6rem',
                         background: 'rgba(233, 69, 96, 0.1)',
                         borderRadius: '4px',
-                        borderLeft: '3px solid #e94560'
+                        borderLeft: '3px solid #e94560',
+                        lineHeight: '1.5'
                       }}>
                         {alert.message}
                       </div>
@@ -738,7 +743,7 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                     {alertResult.alerts.length > 2 && (
                       <div style={{ 
                         marginTop: '0.3rem',
-                        fontSize: '0.7rem',
+                        fontSize: '0.88rem',
                         color: 'rgba(255,255,255,0.5)',
                         fontStyle: 'italic'
                       }}>
@@ -932,6 +937,7 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
           configDeepVisionEnabled={config.ui?.deepVisionEnabled !== false}
           configCmpEnabled={config.centralServer?.enabled ?? false}
           configCmpUrl={config.centralServer?.url ?? ''}
+          configCloudCmpUrl={config.centralServer?.cloudUrl ?? ''}
           configTailscaleEnabled={config.tailscale?.enabled ?? true}
           configTailscaleMode={config.tailscale?.mode ?? 'inbound'}
           onClose={() => setShowSettings(false)}

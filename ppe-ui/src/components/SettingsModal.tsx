@@ -33,6 +33,7 @@ interface AppSettings {
   centralServer: {
     enabled: boolean;
     url: string;
+    cloudUrl?: string;
   };
   tailscale: {
     enabled: boolean;
@@ -49,6 +50,7 @@ interface SettingsModalProps {
   configDeepVisionEnabled: boolean;
   configCmpEnabled: boolean;
   configCmpUrl: string;
+  configCloudCmpUrl: string;
   configTailscaleEnabled: boolean;
   configTailscaleMode: 'inbound' | 'outbound';
   onClose: () => void;
@@ -72,6 +74,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   configDeepVisionEnabled,
   configCmpEnabled,
   configCmpUrl,
+  configCloudCmpUrl,
   configTailscaleEnabled,
   configTailscaleMode,
   onClose,
@@ -190,6 +193,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       centralServer: {
         enabled: cmpEnabled,
         url: cmpUrl.trim(),
+        cloudUrl: configCloudCmpUrl,
       },
       tailscale: {
         enabled: tailscaleEnabled,
@@ -433,17 +437,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 {Object.entries(serviceStatus).map(([unit, { label, status }]) => {
                   const isActive = status === 'active';
                   const isFailed = status === 'failed';
+                  const dotColor = isActive ? '#4caf50' : isFailed ? '#f44336' : '#ff9800';
+                  const statusText = isActive ? 'UP' : isFailed ? 'Failed' : 'Down';
                   return (
                     <div key={unit} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                      <span style={{ color: 'rgba(255,255,255,0.9)' }}>{label}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{
+                          display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+                          background: dotColor, boxShadow: `0 0 5px ${dotColor}`,
+                          flexShrink: 0,
+                        }} />
+                        <span style={{ color: 'rgba(255,255,255,0.9)' }}>{label}</span>
+                      </div>
                       <span style={{
-                        padding: '0.2rem 0.5rem',
-                        borderRadius: '4px',
-                        fontWeight: 500,
-                        background: isActive ? 'rgba(76, 175, 80, 0.25)' : isFailed ? 'rgba(244, 67, 54, 0.25)' : 'rgba(255, 152, 0, 0.2)',
-                        color: isActive ? '#81c784' : isFailed ? '#e57373' : '#ffb74d'
+                        fontSize: '0.8rem', fontWeight: 600,
+                        color: dotColor,
                       }}>
-                        {status === 'active' ? 'Running' : status === 'failed' ? 'Failed' : status === 'inactive' ? 'Stopped' : status}
+                        {statusText}
                       </span>
                     </div>
                   );
@@ -741,11 +751,52 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <label style={{ display: 'block', marginBottom: '0.5rem', color: 'rgba(255,255,255,0.9)', fontSize: '0.9rem' }}>
                   CMP Webhook URL
                 </label>
-                <small style={{ display: 'block', marginBottom: '0.35rem', color: 'rgba(255,255,255,0.55)', fontSize: '0.75rem' }}>
-                  Path must be <code style={{ color: '#00d9ff' }}>/api/webhook/edge-report</code>. Local CMP copy in this repo, <code style={{ color: '#00d9ff' }}>CCTVCMP-linux</code> (port 3002):{' '}
-                  <code style={{ color: '#00d9ff' }}>http://localhost:3002/api/webhook/edge-report</code>
-                  {' · '}Production: your CMP host + <code style={{ color: '#00d9ff' }}>/api/webhook/edge-report</code> (e.g. Vercel deployment URL)
-                </small>
+                {/* Quick-select presets */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  {(() => {
+                    const localUrl = 'http://localhost:3002/api/webhook/edge-report';
+                    const cloudUrl = configCloudCmpUrl || '';
+                    const isLocal = cmpUrl === localUrl;
+                    const isCloud = cloudUrl && cmpUrl === cloudUrl;
+                    const btnBase: React.CSSProperties = {
+                      padding: '0.3rem 0.75rem',
+                      borderRadius: '4px',
+                      fontSize: '0.8rem',
+                      cursor: 'pointer',
+                      border: '1px solid rgba(0,217,255,0.4)',
+                      transition: 'background 0.15s',
+                    };
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => { setCmpUrl(localUrl); setHasChanges(true); }}
+                          style={{
+                            ...btnBase,
+                            background: isLocal ? 'rgba(0,217,255,0.25)' : 'rgba(0,0,0,0.3)',
+                            color: isLocal ? '#00d9ff' : 'rgba(255,255,255,0.7)',
+                          }}
+                        >
+                          Local (localhost:3002)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { if (cloudUrl) { setCmpUrl(cloudUrl); setHasChanges(true); } }}
+                          disabled={!cloudUrl}
+                          title={cloudUrl ? cloudUrl : 'Set cloudUrl in app.config.json → centralServer.cloudUrl'}
+                          style={{
+                            ...btnBase,
+                            background: isCloud ? 'rgba(0,217,255,0.25)' : 'rgba(0,0,0,0.3)',
+                            color: isCloud ? '#00d9ff' : cloudUrl ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.3)',
+                            cursor: cloudUrl ? 'pointer' : 'not-allowed',
+                          }}
+                        >
+                          Cloud CMP{!cloudUrl && ' (not configured)'}
+                        </button>
+                      </>
+                    );
+                  })()}
+                </div>
                 <input
                   type="text"
                   value={cmpUrl}

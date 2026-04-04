@@ -1,12 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { EdgeDeviceList } from "@/components/edge-devices/edge-device-list";
-import { RegisterDeviceForm } from "@/components/edge-devices/register-device-form";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ONLINE_THRESHOLD_MS } from "@/lib/camera-status";
 
 export default async function EdgeDevicesPage() {
-  const [cameras, projects] = await Promise.all([
-    prisma.camera.findMany({
+  const cameras = await prisma.camera.findMany({
     include: {
       project: { select: { id: true, name: true } },
       zone: { select: { id: true, name: true } },
@@ -27,12 +25,7 @@ export default async function EdgeDevicesPage() {
       _count: { select: { incidents: true, edgeReports: true } },
     },
     orderBy: { createdAt: "desc" },
-  }),
-    prisma.project.findMany({
-      include: { zones: { select: { id: true, name: true } } },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
+  });
 
   const now = Date.now();
   const devices = cameras
@@ -66,6 +59,7 @@ export default async function EdgeDevicesPage() {
         zone: cam.zone,
         isOnline:
           cam.status !== "maintenance" &&
+          cam.status !== "degraded" &&
           cam.lastReportAt != null &&
           now - cam.lastReportAt.getTime() < ONLINE_THRESHOLD_MS,
         latestReport: latestReport
@@ -89,23 +83,14 @@ export default async function EdgeDevicesPage() {
 
   const onlineCount = devices.filter((d) => d.isOnline).length;
 
-  const projectList = projects.map((p) => ({
-    id: p.id,
-    name: p.name,
-    zones: p.zones,
-  }));
-
   return (
     <div className="space-y-6">
       <AutoRefresh intervalSec={10} />
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">Edge Devices</h2>
-          <p className="text-sm text-muted-foreground">
-            {onlineCount} online / {devices.length} total
-          </p>
-        </div>
-        <RegisterDeviceForm projects={projectList} />
+      <div>
+        <h2 className="text-2xl font-semibold">Edge Devices</h2>
+        <p className="text-sm text-muted-foreground">
+          {onlineCount} online / {devices.length} total
+        </p>
       </div>
       <EdgeDeviceList devices={devices} />
     </div>

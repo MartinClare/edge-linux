@@ -12,6 +12,20 @@ import { EdgeDeviceReportFeed } from "@/components/edge-devices/edge-device-repo
 import { CameraSnapshot } from "@/components/edge-devices/camera-snapshot";
 import { ONLINE_THRESHOLD_MS } from "@/lib/camera-status";
 
+function buildCmpDescription(classificationJson: unknown, visionVerificationJson: unknown): string {
+  const cls = classificationJson as { classifications?: Array<{ type: string; detected: boolean; riskLevel: string; confidence: number; reasoning?: string }>; source?: string } | null;
+  const vv = visionVerificationJson as { summary?: string; missedHazards?: string[]; incorrectClaims?: string[] } | null;
+  const detected = (cls?.classifications ?? []).filter((c) => c.detected);
+  if (detected.length === 0 && !vv?.summary) return "";
+  let text = detected.length === 0
+    ? "CMP found no safety incidents."
+    : `CMP identified: ${detected.map((c) => `${c.type.replace(/_/g, " ")} (${c.riskLevel}, ${Math.round(c.confidence * 100)}%)`).join("; ")}.`;
+  if (vv?.summary) text += ` ${vv.summary}`;
+  if (vv?.missedHazards?.length) text += ` Missed by edge: ${vv.missedHazards.join("; ")}.`;
+  if (vv?.incorrectClaims?.length) text += ` Not confirmed: ${vv.incorrectClaims.join("; ")}.`;
+  return text;
+}
+
 export default async function EdgeDeviceDetailPage({ params }: { params: { id: string } }) {
   const camera = await prisma.camera.findUnique({
     where: { id: params.id },
@@ -52,6 +66,7 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
       fireSafety: true,
       propertySecurity: true,
       classificationJson: true,
+      visionVerificationJson: true,
       // rawJson carries analysis.detections (bounding boxes) from Gemini
       rawJson: true,
     },
@@ -60,6 +75,7 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
   const now = Date.now();
   const isOnline =
     camera.status !== "maintenance" &&
+    camera.status !== "degraded" &&
     camera.lastReportAt != null &&
     now - camera.lastReportAt.getTime() < ONLINE_THRESHOLD_MS;
 
@@ -76,6 +92,7 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
     fireSafety: r.fireSafety ?? null,
     propertySecurity: r.propertySecurity ?? null,
     classificationJson: r.classificationJson ?? null,
+    visionVerificationJson: r.visionVerificationJson ?? null,
     rawJson: r.rawJson ?? null,
   }));
 
@@ -103,6 +120,11 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
         <div className="flex items-center gap-2 shrink-0">
           {camera.status === "maintenance" ? (
             <Badge variant="secondary">Maintenance</Badge>
+          ) : camera.status === "degraded" ? (
+            <span className="flex items-center gap-1.5 text-sm text-yellow-500">
+              <span className="h-2.5 w-2.5 rounded-full bg-yellow-500 animate-pulse" />
+              Stream Issue
+            </span>
           ) : isOnline ? (
             <span className="flex items-center gap-1.5 text-sm text-green-500">
               <span className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
@@ -156,7 +178,7 @@ export default async function EdgeDeviceDetailPage({ params }: { params: { id: s
             {latestAnalysis ? (
               <>
                 <p className="text-muted-foreground/90 leading-relaxed text-xs">
-                  {latestAnalysis.overallDescription || "No description."}
+                  {buildCmpDescription(latestAnalysis.classificationJson, latestAnalysis.visionVerificationJson) || latestAnalysis.overallDescription || "No description."}
                 </p>
                 {(latestAnalysis.missingHardhats ?? 0) > 0 && (
                   <p className="text-red-400 text-xs font-medium">

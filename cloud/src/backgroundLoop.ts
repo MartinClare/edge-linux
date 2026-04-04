@@ -173,11 +173,13 @@ async function analysisIteration(): Promise<void> {
       latestResults.set(camera.id, buildCachedResult(camera.id, camera.name, result));
 
       const central = getCentralConfig(cfg);
+      // Frame was just captured successfully → stream is healthy
       const payload = buildAnalysisReportPayload(
         camera.id,
         camera.name,
         result,
         camera.url,
+        true,
         true,
       );
       sendToCMP(central, payload, frameJpeg).catch(() => {});

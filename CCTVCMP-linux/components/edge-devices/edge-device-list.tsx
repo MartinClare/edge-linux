@@ -73,6 +73,14 @@ function StatusDot({ device }: { device: Device }) {
       </span>
     );
   }
+  if (device.status === "degraded") {
+    return (
+      <span className="flex items-center gap-1.5 text-xs text-yellow-400 font-medium">
+        <span className="h-2.5 w-2.5 rounded-full bg-yellow-400 animate-pulse" />
+        Stream Issue
+      </span>
+    );
+  }
   if (device.isOnline) {
     return (
       <span className="flex items-center gap-1.5 text-xs text-green-400 font-medium">

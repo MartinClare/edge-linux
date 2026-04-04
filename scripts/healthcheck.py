@@ -172,13 +172,6 @@ HEAL_ACTIONS: dict[str, callable] = {
     "systemd:edge-ui-local":    lambda: _systemctl_restart("edge-ui-local"),
 
     # Manually-started processes — start them directly as the current user
-    "process:python-ai": lambda: _start_bg(
-        ["/usr/bin/python3", "-m", "uvicorn", "app.main:app",
-         "--host", "0.0.0.0", "--port", "8000", "--workers", "1"],
-        cwd=str(BASE / "python"),
-        env_extra={"PYTHONUNBUFFERED": "1", "YOLO_DEVICE": "cpu",
-                   "GEMINI_REQUIRE_VPN": "true"},
-    ),
     "process:go2rtc": lambda: _start_bg(
         ["/usr/local/bin/go2rtc", "-config", str(BASE / "go2rtc.yaml")],
         cwd=str(BASE),
@@ -197,7 +190,6 @@ CHECK_ALIAS: dict[str, str] = {
     "port:3000 (PPE-UI)":    "systemd:edge-ui-local",
     "port:3001 (edge-cloud)":"systemd:edge-cloud-local",
     "port:3002 (CMP)":       "process:CMP",
-    "port:8000 (python-ai)": "process:python-ai",
     "port:1984 (go2rtc)":    "process:go2rtc",
     "CMP:api":               "process:CMP",
 }
@@ -260,7 +252,6 @@ def heal_failures(failures: list[Check]) -> tuple[list[HealResult], list[Check]]
             new_check = check_port(f.name, host_val, port_val)
         elif f.name.startswith("process:"):
             patterns = {
-                "process:python-ai": "uvicorn app.main:app",
                 "process:go2rtc":    "go2rtc",
                 "process:CMP":       "next start -p 3002",
             }
@@ -301,11 +292,9 @@ def run_checks() -> list[Check]:
     results.append(check_port("port:3000 (PPE-UI)",    "localhost", 3000))
     results.append(check_port("port:3001 (edge-cloud)", "localhost", 3001))
     results.append(check_port("port:3002 (CMP)",        "localhost", 3002))
-    results.append(check_port("port:8000 (python-ai)",  "localhost", 8000))
     results.append(check_port("port:1984 (go2rtc)",     "localhost", 1984))
 
     # Process checks (covers manually started services)
-    results.append(check_process("process:python-ai", "uvicorn app.main:app"))
     results.append(check_process("process:go2rtc",    "go2rtc"))
     results.append(check_process("process:CMP",       "next start -p 3002"))
 

@@ -140,7 +140,6 @@ function applyTailscale(enabled: boolean): void {
 const SERVICE_UNITS: Array<[string[], string]> = [
   [['edge-cloud-local', 'edge-cloud'], 'Cloud Vision API'],
   [['edge-ui-local', 'edge-ui'], 'PPE UI'],
-  [['wg-mullvad'], 'VPN (Mullvad)'],
   [['tailscaled'], 'Tailscale'],
 ];
 
@@ -248,11 +247,26 @@ router.put('/config', (req: Request, res: Response) => {
   }
 });
 
-router.get('/services/status', (_req: Request, res: Response) => {
+router.get('/services/status', async (_req: Request, res: Response) => {
+  const PORT_CHECKS: Array<[string, string, number]> = [
+    ['edge-cloud-local', 'Cloud Vision API', 3001],
+    ['edge-ui-local',    'PPE UI',           3000],
+    ['cmp',             'CMP',               3002],
+    ['go2rtc',          'go2rtc',            GO2RTC_PORT],
+    ['tailscaled',      'Tailscale',         null as unknown as number],
+  ];
+
   const result: Record<string, { label: string; status: string }> = {};
-  for (const [units, label] of SERVICE_UNITS) {
-    result[units[0]] = { label, status: getServiceStatus(units) };
+
+  for (const [unit, label, port] of PORT_CHECKS) {
+    if (port) {
+      const up = await checkPort('localhost', port, 2000);
+      result[unit] = { label, status: up ? 'active' : 'inactive' };
+    } else {
+      result[unit] = { label, status: getServiceStatus([unit, unit.replace('-local', '')]) };
+    }
   }
+
   res.json(result);
 });
 
@@ -287,12 +301,11 @@ async function checkGo2rtcStreams(): Promise<Record<string, boolean>> {
 
 router.get('/health/all', async (_req: Request, res: Response) => {
   const [
-    portEdgeCloud, portPpeUi, portCmp, portPythonAi, portGo2rtc,
+    portEdgeCloud, portPpeUi, portCmp, portGo2rtc,
   ] = await Promise.all([
     checkPort('localhost', 3001),
     checkPort('localhost', 3000),
     checkPort('localhost', 3002),
-    checkPort('localhost', 8000),
     checkPort('localhost', GO2RTC_PORT),
   ]);
 
@@ -309,7 +322,6 @@ router.get('/health/all', async (_req: Request, res: Response) => {
       'Edge Cloud API':  { ok: portEdgeCloud,  port: 3001 },
       'PPE UI':          { ok: portPpeUi,       port: 3000 },
       'CMP':             { ok: portCmp,          port: 3002 },
-      'Python AI':       { ok: portPythonAi,     port: 8000 },
       'go2rtc':          { ok: portGo2rtc,       port: GO2RTC_PORT },
     },
     systemd,
