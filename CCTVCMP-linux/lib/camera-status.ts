@@ -17,3 +17,36 @@
  * edge box cannot cause false-offline readings.
  */
 export const ONLINE_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+
+const SYNTHETIC_CAMERA_PREFIXES = ["heartbeat-probe"];
+
+export function isSyntheticEdgeCamera(camera: {
+  name?: string | null;
+  edgeCameraId?: string | null;
+}) {
+  const candidates = [camera.name, camera.edgeCameraId]
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim().toLowerCase());
+
+  return candidates.some(
+    (value) =>
+      SYNTHETIC_CAMERA_PREFIXES.some((prefix) => value.startsWith(prefix))
+  );
+}
+
+export function shouldDisplayEdgeCamera(
+  camera: {
+    name?: string | null;
+    edgeCameraId?: string | null;
+    streamUrl?: string | null;
+    edgeReports: Array<{ messageType: string; keepalive: boolean }>;
+  }
+) {
+  if (isSyntheticEdgeCamera(camera)) return false;
+
+  const hasAnalysisReport = camera.edgeReports.some(
+    (report) => !report.keepalive && report.messageType !== "keepalive"
+  );
+
+  return Boolean(camera.streamUrl) || hasAnalysisReport;
+}

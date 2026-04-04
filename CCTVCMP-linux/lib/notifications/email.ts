@@ -11,25 +11,26 @@ type IncidentWithRelations = Incident & {
 /**
  * Send an email notification for an incident.
  *
- * Config shape:
- * {
- *   smtpHost: string,
- *   smtpPort: number,
- *   smtpUser: string,
- *   smtpPass: string,
- *   from: string,
- *   to: string | string[],
- *   secure: boolean
- * }
- *
- * Uses nodemailer if available; falls back to logging.
+ * SMTP credentials are read from environment variables (SMTP_HOST, SMTP_PORT,
+ * SMTP_USER, SMTP_PASS, SMTP_FROM).  The channel config only needs to supply
+ * the recipient address(es) via the `to` field.
  */
 export async function sendEmail(config: EmailConfig, incident: IncidentWithRelations): Promise<void> {
-  const to = config.to as string | string[];
-  const from = (config.from as string) || "alerts@axon-vision.local";
-
-  if (!to) {
+  const to = config.to as string | string[] | undefined;
+  if (!to || (Array.isArray(to) && to.length === 0)) {
     throw new Error("Email channel missing 'to' address");
+  }
+
+  const host = process.env.SMTP_HOST;
+  const port = parseInt(process.env.SMTP_PORT ?? "587");
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const from = process.env.SMTP_FROM ?? user ?? "alerts@axon-vision.local";
+
+  if (!host || !user || !pass) {
+    throw new Error(
+      "SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASS in .env"
+    );
   }
 
   const subject = `[${incident.riskLevel.toUpperCase()}] ${incident.type.replace(/_/g, " ")} — ${incident.camera?.name ?? "Unknown camera"}`;
@@ -45,37 +46,21 @@ export async function sendEmail(config: EmailConfig, incident: IncidentWithRelat
     `\n---\nAxon Vision CMP`,
   ].join("\n");
 
-  try {
-    const nodemailer = await import("nodemailer");
+  const nodemailer = await import("nodemailer");
 
-    const transporter = nodemailer.createTransport({
-      host: config.smtpHost as string,
-      port: (config.smtpPort as number) || 587,
-      secure: (config.secure as boolean) ?? false,
-      auth: {
-        user: config.smtpUser as string,
-        pass: config.smtpPass as string,
-      },
-    });
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
 
-    await transporter.sendMail({
-      from,
-      to: Array.isArray(to) ? to.join(", ") : to,
-      subject,
-      text: body,
-    });
+  await transporter.sendMail({
+    from,
+    to: Array.isArray(to) ? to.join(", ") : to,
+    subject,
+    text: body,
+  });
 
-    console.log(`[Email] Sent to ${to} for incident ${incident.id}`);
-  } catch (err: unknown) {
-    if (
-      err instanceof Error &&
-      (err.message.includes("Cannot find module") || err.message.includes("MODULE_NOT_FOUND"))
-    ) {
-      console.warn("[Email] nodemailer not installed — logging email instead");
-      console.log(`[Email] To: ${to}, Subject: ${subject}`);
-      console.log(`[Email] Body:\n${body}`);
-      return;
-    }
-    throw err;
-  }
+  console.log(`[Email] Sent to ${Array.isArray(to) ? to.join(", ") : to} for incident ${incident.id}`);
 }

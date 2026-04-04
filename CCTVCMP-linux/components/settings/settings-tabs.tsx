@@ -274,19 +274,159 @@ function AlarmRulesTab({ rules }: { rules: AlarmRule[] }) {
   );
 }
 
+const RISK_LEVELS = ["low", "medium", "high", "critical"] as const;
+
+function isValidEmail(v: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+}
+
+function EmailRecipientsInput({
+  addresses,
+  onChange,
+}: {
+  addresses: string[];
+  onChange: (a: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+
+  function addDraft() {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    // support pasting a comma-separated list
+    const entries = trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+    const next = [...addresses];
+    for (const e of entries) {
+      if (!next.includes(e)) next.push(e);
+    }
+    onChange(next);
+    setDraft("");
+  }
+
+  function remove(addr: string) {
+    onChange(addresses.filter((a) => a !== addr));
+  }
+
+  return (
+    <div className="space-y-2">
+      <label className="text-xs text-muted-foreground">Recipient addresses</label>
+      {addresses.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {addresses.map((addr) => (
+            <span
+              key={addr}
+              className="inline-flex items-center gap-1 rounded-full border bg-muted px-2.5 py-0.5 text-xs"
+            >
+              {addr}
+              <button
+                type="button"
+                onClick={() => remove(addr)}
+                className="ml-0.5 text-muted-foreground hover:text-foreground leading-none"
+                aria-label={`Remove ${addr}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              addDraft();
+            }
+          }}
+          placeholder="name@example.com"
+          className="flex-1"
+        />
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={addDraft}
+          disabled={!draft.trim() || !isValidEmail(draft)}
+        >
+          Add
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground/60">
+        Press Enter or click Add after each address. SMTP is configured centrally on the server.
+      </p>
+    </div>
+  );
+}
+
+function ChannelConfigEditor({ channel }: { channel: Channel }) {
+  const cfg = (channel.config ?? {}) as Record<string, unknown>;
+  const [addresses, setAddresses] = useState<string[]>(
+    Array.isArray(cfg.to)
+      ? (cfg.to as string[])
+      : cfg.to
+      ? String(cfg.to).split(",").map((s) => s.trim()).filter(Boolean)
+      : []
+  );
+  const [minRisk, setMinRisk] = useState(channel.minRiskLevel);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    const config = channel.type === "email" ? { to: addresses } : cfg;
+    await fetch(`/api/notification-channels/${channel.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config, minRiskLevel: minRisk }),
+    });
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  return (
+    <div className="mt-3 space-y-3 border-t pt-3">
+      <div className="flex items-center gap-3">
+        <label className="text-xs text-muted-foreground whitespace-nowrap">Min risk level</label>
+        <select
+          className="rounded border bg-background px-2 py-1 text-sm"
+          value={minRisk}
+          onChange={(e) => setMinRisk(e.target.value)}
+        >
+          {RISK_LEVELS.map((r) => (
+            <option key={r} value={r}>
+              {r.charAt(0).toUpperCase() + r.slice(1)}
+            </option>
+          ))}
+        </select>
+      </div>
+      {channel.type === "email" && (
+        <EmailRecipientsInput addresses={addresses} onChange={setAddresses} />
+      )}
+      <Button size="sm" onClick={save} disabled={saving}>
+        {saved ? "Saved ✓" : saving ? "Saving..." : "Save"}
+      </Button>
+    </div>
+  );
+}
+
 function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
-  const [type, setType] = useState<"email" | "webhook" | "dashboard">("dashboard");
+  const [type, setType] = useState<"email" | "webhook" | "dashboard">("email");
+  const [minRisk, setMinRisk] = useState<"low" | "medium" | "high" | "critical">("medium");
+  const [addresses, setAddresses] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   async function sendTest(id: string) {
     setTestingId(id);
     try {
       const res = await fetch(`/api/notification-channels/${id}/test`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) alert("Test notification sent.");
+      if (res.ok && data.success) alert("Test notification sent successfully.");
       else alert(data.message ?? "Test failed.");
     } finally {
       setTestingId(null);
@@ -295,13 +435,16 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
 
   async function createChannel() {
     setSaving(true);
+    const config = type === "email" ? { to: addresses } : {};
     await fetch("/api/notification-channels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, type, config: {} }),
+      body: JSON.stringify({ name, type, minRiskLevel: minRisk, config }),
     });
     setSaving(false);
     setCreating(false);
+    setName("");
+    setAddresses([]);
     window.location.reload();
   }
 
@@ -320,6 +463,18 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
     window.location.reload();
   }
 
+  function channelSummary(ch: Channel) {
+    const cfg = (ch.config ?? {}) as Record<string, unknown>;
+    if (ch.type === "email") {
+      const to = Array.isArray(cfg.to) ? (cfg.to as string[]).join(", ") : (cfg.to as string);
+      return to ? `→ ${to}` : "⚠ No recipient configured";
+    }
+    if (ch.type === "webhook") {
+      return (cfg.url as string) ? `→ ${cfg.url}` : "⚠ No URL configured";
+    }
+    return "In-app dashboard alerts";
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -327,7 +482,7 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
           <div>
             <CardTitle className="text-lg">Notification Channels</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Configure where incident alerts are sent. Dashboard notifications are always available.
+              Configure where incident alerts are sent. Each channel can have its own minimum risk threshold.
             </p>
           </div>
           <Button size="sm" onClick={() => setCreating(!creating)}>
@@ -337,25 +492,49 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
       </CardHeader>
       <CardContent className="space-y-4">
         {creating && (
-          <div className="flex items-end gap-3 rounded-md border p-4">
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Name</label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Channel name" />
+          <div className="rounded-md border p-4 space-y-4">
+            <div className="flex items-end gap-3 flex-wrap">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Channel Name</label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Security Team Email"
+                  className="w-56"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Type</label>
+                <select
+                  className="rounded border bg-background px-3 py-2 text-sm"
+                  value={type}
+                  onChange={(e) => setType(e.target.value as typeof type)}
+                >
+                  <option value="email">Email</option>
+                  <option value="dashboard">Dashboard</option>
+                  <option value="webhook">Webhook</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Min Risk Level</label>
+                <select
+                  className="rounded border bg-background px-3 py-2 text-sm"
+                  value={minRisk}
+                  onChange={(e) => setMinRisk(e.target.value as typeof minRisk)}
+                >
+                  {RISK_LEVELS.map((r) => (
+                    <option key={r} value={r}>
+                      {r.charAt(0).toUpperCase() + r.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Type</label>
-              <select
-                className="rounded border bg-background px-3 py-2 text-sm"
-                value={type}
-                onChange={(e) => setType(e.target.value as typeof type)}
-              >
-                <option value="dashboard">Dashboard</option>
-                <option value="email">Email</option>
-                <option value="webhook">Webhook</option>
-              </select>
-            </div>
+            {type === "email" && (
+              <EmailRecipientsInput addresses={addresses} onChange={setAddresses} />
+            )}
             <Button onClick={createChannel} disabled={saving || !name}>
-              {saving ? "Creating..." : "Create"}
+              {saving ? "Creating..." : "Create Channel"}
             </Button>
           </div>
         )}
@@ -367,32 +546,63 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
         )}
 
         {channels.map((ch) => (
-          <div key={ch.id} className="flex items-center justify-between rounded-md border p-4">
-            <div className="flex items-center gap-3">
-              <Badge variant="secondary">{ch.type}</Badge>
-              <div>
-                <p className="font-medium text-sm">{ch.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  Min risk: {ch.minRiskLevel} &middot; {ch._count.logs} notifications sent
-                </p>
+          <div key={ch.id} className="rounded-md border p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Badge variant="secondary">{ch.type}</Badge>
+                <Badge
+                  variant={
+                    ch.minRiskLevel === "critical"
+                      ? "destructive"
+                      : ch.minRiskLevel === "high"
+                      ? "destructive"
+                      : "outline"
+                  }
+                  className="text-xs"
+                >
+                  ≥ {ch.minRiskLevel}
+                </Badge>
+                <div>
+                  <p className="font-medium text-sm">{ch.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {channelSummary(ch)} &middot; {ch._count.logs} sent
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setExpandedId(expandedId === ch.id ? null : ch.id)}
+                >
+                  {expandedId === ch.id ? "Close" : "Edit"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={testingId === ch.id}
+                  onClick={() => sendTest(ch.id)}
+                >
+                  {testingId === ch.id ? "Sending..." : "Test"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant={ch.enabled ? "default" : "outline"}
+                  onClick={() => toggleEnabled(ch.id, ch.enabled)}
+                >
+                  {ch.enabled ? "Enabled" : "Disabled"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-red-400"
+                  onClick={() => deleteChannel(ch.id)}
+                >
+                  Delete
+                </Button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={testingId === ch.id}
-                onClick={() => sendTest(ch.id)}
-              >
-                {testingId === ch.id ? "Sending..." : "Test"}
-              </Button>
-              <Button size="sm" variant={ch.enabled ? "default" : "outline"} onClick={() => toggleEnabled(ch.id, ch.enabled)}>
-                {ch.enabled ? "Enabled" : "Disabled"}
-              </Button>
-              <Button size="sm" variant="outline" className="text-red-400" onClick={() => deleteChannel(ch.id)}>
-                Delete
-              </Button>
-            </div>
+            {expandedId === ch.id && <ChannelConfigEditor channel={ch} />}
           </div>
         ))}
       </CardContent>

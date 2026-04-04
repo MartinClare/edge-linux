@@ -957,8 +957,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
             {scanResult !== null && (
               <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(0, 0, 0, 0.25)', borderRadius: '8px', border: '1px solid rgba(0, 217, 255, 0.2)' }}>
-                <div style={{ fontWeight: 600, color: '#00d9ff', marginBottom: '0.75rem' }}>
-                  Found {scanResult.length} camera(s)
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                  <div style={{ fontWeight: 600, color: '#00d9ff' }}>
+                    Found {scanResult.length} camera(s)
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setScanResult(null)}
+                    style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: '1.1rem', lineHeight: 1, padding: '0 4px' }}
+                    title="Clear results"
+                  >
+                    ✕
+                  </button>
                 </div>
                 {scanResult.length === 0 ? (
                   <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.9rem' }}>No RTSP cameras found. Check network prefix and credentials.</div>

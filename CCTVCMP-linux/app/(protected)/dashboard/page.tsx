@@ -4,7 +4,7 @@ import { EdgeStatusPanel } from "@/components/dashboard/edge-status-panel";
 import { RiskBreakdown } from "@/components/dashboard/risk-breakdown";
 import { AlertFeed } from "@/components/dashboard/alert-feed";
 import { AutoRefresh } from "@/components/auto-refresh";
-import { ONLINE_THRESHOLD_MS } from "@/lib/camera-status";
+import { ONLINE_THRESHOLD_MS, shouldDisplayEdgeCamera } from "@/lib/camera-status";
 
 const CATEGORY_MAP: Record<string, { category: string; icon: string }> = {
   ppe_violation: { category: "PPE", icon: "🪖" },
@@ -19,7 +19,7 @@ const CATEGORY_MAP: Record<string, { category: string; icon: string }> = {
 
 export default async function DashboardPage() {
   const [incidents, metrics, cameras, recentIncidents] = await Promise.all([
-    prisma.incident.findMany(),
+    prisma.incident.findMany({ where: { NOT: { notes: "__test__" } } }),
     prisma.dailyMetric.findMany({ orderBy: { date: "desc" }, take: 14 }),
     prisma.camera.findMany({
       include: {
@@ -37,6 +37,7 @@ export default async function DashboardPage() {
       },
     }),
     prisma.incident.findMany({
+      where: { NOT: { notes: "__test__" } },
       take: 20,
       orderBy: { detectedAt: "desc" },
       include: { camera: { select: { name: true } } },
@@ -45,15 +46,7 @@ export default async function DashboardPage() {
 
   const now = Date.now();
   const edgeDevices = cameras
-    .filter((cam) => {
-      // Hide probe-only / heartbeat-only pseudo devices from the dashboard.
-      // Real CCTV devices either publish a stream URL or have at least one
-      // non-keepalive analysis report.
-      const hasAnalysisReport = cam.edgeReports.some(
-        (r) => !r.keepalive && r.messageType !== "keepalive"
-      );
-      return Boolean(cam.streamUrl) || hasAnalysisReport;
-    })
+    .filter(shouldDisplayEdgeCamera)
     .map((cam) => ({
       id: cam.id,
       name: cam.name,

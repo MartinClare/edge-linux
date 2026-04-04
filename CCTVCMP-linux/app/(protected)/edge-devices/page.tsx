@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { EdgeDeviceList } from "@/components/edge-devices/edge-device-list";
 import { AutoRefresh } from "@/components/auto-refresh";
-import { ONLINE_THRESHOLD_MS } from "@/lib/camera-status";
+import { ONLINE_THRESHOLD_MS, shouldDisplayEdgeCamera } from "@/lib/camera-status";
 
 export default async function EdgeDevicesPage() {
   const cameras = await prisma.camera.findMany({
@@ -29,15 +29,7 @@ export default async function EdgeDevicesPage() {
 
   const now = Date.now();
   const devices = cameras
-    .filter((cam) => {
-      // Hide probe-only / heartbeat-only pseudo devices from the list.
-      // Real CCTV devices either publish a stream URL or have at least one
-      // non-keepalive analysis report.
-      const hasAnalysisReport = cam.edgeReports.some(
-        (r) => !r.keepalive && r.messageType !== "keepalive"
-      );
-      return Boolean(cam.streamUrl) || hasAnalysisReport;
-    })
+    .filter(shouldDisplayEdgeCamera)
     .map((cam) => {
       const latestReport = cam.edgeReports[0] ?? null;
       const latestAlertEvidence =
