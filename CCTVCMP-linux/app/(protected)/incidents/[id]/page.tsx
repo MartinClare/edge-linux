@@ -211,27 +211,6 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
 
               {/* Metadata */}
               <div className="space-y-4">
-                {/* People / PPE counts */}
-                {(evidence.peopleCount != null || evidence.missingHardhats != null || evidence.missingVests != null) && (
-                  <div className="flex flex-wrap gap-2 text-sm">
-                    {evidence.peopleCount != null && (
-                      <span className="rounded-md border px-2 py-0.5">
-                        👷 {evidence.peopleCount} {evidence.peopleCount === 1 ? "person" : "people"}
-                      </span>
-                    )}
-                    {evidence.missingHardhats != null && evidence.missingHardhats > 0 && (
-                      <span className="rounded-md border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-orange-400">
-                        ⛑ {evidence.missingHardhats} missing hardhat{evidence.missingHardhats > 1 ? "s" : ""}
-                      </span>
-                    )}
-                    {evidence.missingVests != null && evidence.missingVests > 0 && (
-                      <span className="rounded-md border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-orange-400">
-                        🦺 {evidence.missingVests} missing vest{evidence.missingVests > 1 ? "s" : ""}
-                      </span>
-                    )}
-                  </div>
-                )}
-
                 {/* Overall description */}
                 {evidence.overallDescription && (
                   <p className="text-sm text-muted-foreground leading-relaxed">

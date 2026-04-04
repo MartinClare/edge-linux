@@ -95,16 +95,6 @@ export default async function EdgeReportDetailPage({ params }: Props) {
           <Row label="Camera (CMP)" value={report.camera?.name ?? "—"} />
           <Row label="Timestamp" value={formatHKT(report.eventTimestamp ?? report.receivedAt)} />
           <Row label="Received At" value={formatHKT(report.receivedAt)} />
-          <Row label="Keepalive" value={report.keepalive ? "true" : "false"} />
-          <Row label="Image Included Flag" value={report.eventImageIncluded ? "true" : "false"} />
-          <Row label="Image MIME Type" value={report.eventImageMimeType ?? "—"} />
-          {report.classificationJson !== null && typeof report.classificationJson === "object" &&
-            Boolean((report.classificationJson as Record<string, unknown>).classifierModel) && (
-            <Row label="Classifier model" value={String((report.classificationJson as Record<string, unknown>).classifierModel)} />
-          )}
-          {report.visionVerificationJson !== null && typeof report.visionVerificationJson === "object" && (
-            <Row label="Vision model" value={String((report.visionVerificationJson as Record<string, unknown>).model ?? "vision-verified")} />
-          )}
           {report.camera?.streamUrl && (
             <div className="pt-1">
               <span className="text-muted-foreground">Camera Stream</span>
@@ -144,9 +134,8 @@ export default async function EdgeReportDetailPage({ params }: Props) {
               <BoundingBoxCanvas
                 imageUrl={report.eventImagePath}
                 detections={extractDetections(report.rawJson)}
-                className="max-h-[70vh]"
+                maxHeight="70vh"
               />
-              <p className="text-xs text-muted-foreground break-all">{report.eventImagePath}</p>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">No image attached for this record.</p>
