@@ -46,6 +46,9 @@ ppe-ui/build/
 .DS_Store
 Thumbs.db
 
+# Local data (images, etc.) — never commit
+data/
+
 # Logs and cache
 logs/
 *.log
