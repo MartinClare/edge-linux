@@ -324,9 +324,6 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
               CMP Vision Verification
-              {visionVerif.model && (
-                <span className="text-xs font-normal text-muted-foreground">{visionVerif.model}</span>
-              )}
               {visionVerif.descriptionAccuracy && (
                 <span className={`text-xs font-normal ${accuracyColor(visionVerif.descriptionAccuracy)}`}>
                   {visionVerif.descriptionAccuracy.replace("_", " ")}

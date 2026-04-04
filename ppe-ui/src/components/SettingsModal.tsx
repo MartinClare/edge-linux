@@ -34,7 +34,6 @@ interface AppSettings {
     enabled: boolean;
     url: string;
   };
-  vpn: { enabled: boolean };
   tailscale: {
     enabled: boolean;
     mode: 'inbound' | 'outbound';
@@ -50,7 +49,6 @@ interface SettingsModalProps {
   configDeepVisionEnabled: boolean;
   configCmpEnabled: boolean;
   configCmpUrl: string;
-  configVpnEnabled: boolean;
   configTailscaleEnabled: boolean;
   configTailscaleMode: 'inbound' | 'outbound';
   onClose: () => void;
@@ -74,7 +72,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   configDeepVisionEnabled,
   configCmpEnabled,
   configCmpUrl,
-  configVpnEnabled,
   configTailscaleEnabled,
   configTailscaleMode,
   onClose,
@@ -93,7 +90,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [deepVisionEnabled, setDeepVisionEnabled] = useState(configDeepVisionEnabled);
   const [cmpEnabled, setCmpEnabled] = useState(configCmpEnabled);
   const [cmpUrl, setCmpUrl] = useState(configCmpUrl);
-  const [vpnEnabled, setVpnEnabled] = useState(configVpnEnabled);
   const [tailscaleEnabled, setTailscaleEnabled] = useState(configTailscaleEnabled);
   const [tailscaleMode, setTailscaleMode] = useState<'inbound' | 'outbound'>(configTailscaleMode);
   const [hasChanges, setHasChanges] = useState(false);
@@ -195,7 +191,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         enabled: cmpEnabled,
         url: cmpUrl.trim(),
       },
-      vpn: { enabled: vpnEnabled },
       tailscale: {
         enabled: tailscaleEnabled,
         mode: tailscaleMode,
@@ -225,7 +220,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         defaultAnalysisMode: 'gemini',
       },
       centralServer: settings.centralServer,
-      vpn: settings.vpn,
       tailscale: settings.tailscale,
     };
     try {
@@ -265,7 +259,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setDeepVisionEnabled(configDeepVisionEnabled);
       setCmpEnabled(configCmpEnabled);
       setCmpUrl(configCmpUrl);
-      setVpnEnabled(configVpnEnabled);
       setTailscaleEnabled(configTailscaleEnabled);
       setTailscaleMode(configTailscaleMode);
       setHasChanges(true);
@@ -777,29 +770,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <small style={{ display: 'block', color: 'rgba(255,255,255,0.55)', fontSize: '0.75rem' }}>
                   CMP secrets such as the API key and Vercel bypass token are backend-managed and are no longer editable from PPE-UI.
                 </small>
-              </div>
-
-              {/* VPN (Mullvad) */}
-              <div style={{ paddingTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-                <label style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  cursor: 'pointer',
-                  color: 'rgba(255,255,255,0.9)',
-                  fontSize: '0.9rem'
-                }}>
-                  <input
-                    type="checkbox"
-                    checked={vpnEnabled}
-                    onChange={(e) => {
-                      setVpnEnabled(e.target.checked);
-                      setHasChanges(true);
-                    }}
-                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                  />
-                  Enable VPN (Mullvad)
-                </label>
               </div>
 
               {/* Tailscale */}

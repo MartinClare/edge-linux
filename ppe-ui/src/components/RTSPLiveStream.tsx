@@ -182,18 +182,15 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
       {/* ── Video panel ──────────────────────────────────────────── */}
       {isStreaming ? (
         <>
-          <button
-            className="disconnect-btn"
-            onClick={handleDisconnect}
-            style={{
-              background: '#ff4444',
-              marginBottom: compact ? '0.5rem' : '1rem',
-              fontSize: compact ? '0.8rem' : undefined,
-              padding: compact ? '0.35rem 0.65rem' : undefined,
-            }}
-          >
-            Stop Stream
-          </button>
+          {!compact && (
+            <button
+              className="disconnect-btn"
+              onClick={handleDisconnect}
+              style={{ background: '#ff4444', marginBottom: '1rem' }}
+            >
+              Stop Stream
+            </button>
+          )}
           <div className="video-container" style={{ maxWidth: compact ? '100%' : '800px', width: '100%' }}>
             <WebRTCStream
               cameraId={cameraId}

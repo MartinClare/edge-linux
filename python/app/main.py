@@ -466,16 +466,14 @@ async def startup_event():
         observer.start_monitoring()
         logger.info("Alarm observer started successfully")
         logger.info(
-            "Headless safety pipeline: RTSP Deep Vision + CMP webhook run inside this API process; "
-            "PPE-UI is optional (viewing/settings only). Ensure edge-cloud is up for Gemini (port 3001) "
-            "unless EDGE_CLOUD_ANALYZE_URL points elsewhere."
+            "Python AI backend started. RTSP capture, analysis and CMP forwarding are handled "
+            "exclusively by edge-cloud (backgroundLoop.ts). This service provides YOLO detection "
+            "endpoints and WebSocket RTSP streaming only."
         )
-        global _deepvision_task, _heartbeat_task
-        if _deepvision_task is None or _deepvision_task.done():
-            _deepvision_task = asyncio.create_task(_deepvision_background_loop())
-        if _heartbeat_task is None or _heartbeat_task.done():
-            _heartbeat_task = asyncio.create_task(_heartbeat_loop())
-        # Ensure edge-cloud is running regardless of VPN state
+        # Deep-vision loop and heartbeat loop are intentionally NOT started here.
+        # edge-cloud (backgroundLoop.ts) owns the analysis→CMP pipeline to avoid
+        # duplicate reports being sent to CMP on every interval.
+        # Ensure edge-cloud is running
         _ensure_edge_cloud_running()
     except Exception as exc:
         logger.error(f"Failed to start alarm observer: {exc}", exc_info=True)

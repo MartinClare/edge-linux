@@ -17,6 +17,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import * as net from 'node:net';
 import { GO2RTC_PORT, isGo2RTCAvailable } from './go2rtcManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -253,6 +254,67 @@ router.get('/services/status', (_req: Request, res: Response) => {
     result[units[0]] = { label, status: getServiceStatus(units) };
   }
   res.json(result);
+});
+
+// ── Comprehensive health check endpoint ──────────────────────────────
+
+function checkPort(host: string, port: number, timeoutMs = 2500): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = new net.Socket();
+    const done = (ok: boolean) => { sock.destroy(); resolve(ok); };
+    sock.setTimeout(timeoutMs);
+    sock.once('connect', () => done(true));
+    sock.once('error', () => done(false));
+    sock.once('timeout', () => done(false));
+    sock.connect(port, host);
+  });
+}
+
+async function checkGo2rtcStreams(): Promise<Record<string, boolean>> {
+  try {
+    const res = await fetch(`http://localhost:${GO2RTC_PORT}/api/streams`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return {};
+    const data = await res.json() as Record<string, { producers?: unknown[] }>;
+    const result: Record<string, boolean> = {};
+    for (const [name, info] of Object.entries(data)) {
+      result[name] = Array.isArray(info.producers) && info.producers.length > 0;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+router.get('/health/all', async (_req: Request, res: Response) => {
+  const [
+    portEdgeCloud, portPpeUi, portCmp, portPythonAi, portGo2rtc,
+  ] = await Promise.all([
+    checkPort('localhost', 3001),
+    checkPort('localhost', 3000),
+    checkPort('localhost', 3002),
+    checkPort('localhost', 8000),
+    checkPort('localhost', GO2RTC_PORT),
+  ]);
+
+  const streams = portGo2rtc ? await checkGo2rtcStreams() : {};
+
+  const systemd: Record<string, string> = {};
+  for (const [units, label] of SERVICE_UNITS) {
+    systemd[label] = getServiceStatus(units);
+  }
+
+  res.json({
+    timestamp: new Date().toISOString(),
+    services: {
+      'Edge Cloud API':  { ok: portEdgeCloud,  port: 3001 },
+      'PPE UI':          { ok: portPpeUi,       port: 3000 },
+      'CMP':             { ok: portCmp,          port: 3002 },
+      'Python AI':       { ok: portPythonAi,     port: 8000 },
+      'go2rtc':          { ok: portGo2rtc,       port: GO2RTC_PORT },
+    },
+    systemd,
+    streams,
+  });
 });
 
 export default router;

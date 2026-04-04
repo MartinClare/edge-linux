@@ -267,11 +267,13 @@ function higher(a: IncidentRiskLevel, b: IncidentRiskLevel): IncidentRiskLevel {
 /**
  * Merge text-classifier results with vision-classifier results.
  *
+ * The vision model looks directly at the image and is the final arbiter.
+ *
  * Strategy per incident type:
- *  - Both detected  → keep higher risk, average confidence, append reasoning.
- *  - Vision only    → ignored (CMP must not invent a new issue not mentioned by edge).
- *  - Text only      → keep but reduce confidence by 20% (vision didn't corroborate).
- *  - Neither        → not detected.
+ *  - Both detected         → confirmed incident (higher risk, combined reasoning).
+ *  - Vision only detected  → ignored (CMP must not raise new issues the edge did not mention).
+ *  - Text detected, vision says NO → BLOCKED. Vision overrules — no incident emitted.
+ *  - Neither detected      → not detected.
  */
 export function reconcileClassifications(
   textResults: Classification[],
@@ -292,43 +294,33 @@ export function reconcileClassifications(
     const v = visionMap.get(type);
 
     if (t?.detected && v?.detected) {
+      // Both agree — confirmed incident
       reconciled.push({
         type,
         detected: true,
         riskLevel: higher(t.riskLevel, v.riskLevel),
         confidence: Math.min(1.0, (t.confidence + v.confidence) / 2 + 0.1),
-        reasoning: `Text+Vision agree. Text: ${t.reasoning} | Vision: ${v.reasoning}`,
+        reasoning: `Text and vision both confirmed. ${t.reasoning} | Vision: ${v.reasoning}`,
       });
     } else if (!t?.detected && v?.detected) {
-      // Ignore vision-only issues — CMP must not raise new issue types the edge did not mention
+      // Vision-only — ignored, CMP must not invent issues the edge did not report
       reconciled.push({
         type,
         detected: false,
         riskLevel: "low",
         confidence: Math.min(0.75, v.confidence),
-        reasoning: `Ignored vision-only issue (edge did not mention it): ${v.reasoning}`,
+        reasoning: `Vision-only detection ignored (edge did not report it): ${v.reasoning}`,
       });
     } else if (t?.detected && !v?.detected) {
-      // Text claims detection but vision disagrees
-      // For PPE violations: if vision says it's OK or unclear, BLOCK completely (do not create incident)
-      // For other types: reduce confidence but keep detection
-      if (type === "ppe_violation") {
-        reconciled.push({
-          type,
-          detected: false,  // BLOCKED - vision found PPE OK or unclear
-          riskLevel: "low",
-          confidence: 0.1,
-          reasoning: `PPE violation claimed by edge but vision verification found PPE OK or unclear — incident blocked`,
-        });
-      } else {
-        reconciled.push({
-          type,
-          detected: true,
-          riskLevel: t.riskLevel,
-          confidence: Math.max(0, t.confidence - 0.2),
-          reasoning: `Text detected but vision did not corroborate (confidence reduced): ${t.reasoning}`,
-        });
-      }
+      // Text claimed detection but vision looked at the image and disagreed.
+      // Vision is the final authority — block the incident entirely.
+      reconciled.push({
+        type,
+        detected: false,
+        riskLevel: "low",
+        confidence: v?.confidence ?? 0.9,
+        reasoning: `CMP vision reviewed the image and found no evidence — incident blocked. Vision: ${v?.reasoning ?? "not confirmed visually"}`,
+      });
     } else {
       // Neither detected
       reconciled.push({

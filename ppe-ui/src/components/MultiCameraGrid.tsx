@@ -21,9 +21,6 @@ interface CentralServerConfig {
   apiKey?: string;
 }
 
-interface VpnConfig {
-  enabled: boolean;
-}
 
 interface Schedule {
   enabled: boolean;
@@ -46,7 +43,6 @@ interface AppConfig {
     autoStart: boolean;
   };
   centralServer?: CentralServerConfig;
-  vpn?: VpnConfig;
   tailscale?: { enabled: boolean; mode?: 'inbound' | 'outbound' };
 }
 
@@ -295,7 +291,6 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
     autoStart: boolean;
     deepVisionEnabled: boolean;
     centralServer: CentralServerConfig;
-    vpn: VpnConfig;
     tailscale: { enabled: boolean; mode: 'inbound' | 'outbound' };
   }) => {
     setCameraUrls(settings.cameraUrls);
@@ -314,7 +309,6 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
         defaultAnalysisMode: settings.deepVisionEnabled ? 'gemini' : 'yolo',
       },
       centralServer: settings.centralServer,
-      vpn: settings.vpn,
       tailscale: settings.tailscale,
     } : prev);
     console.log('[MultiCamera] Settings saved:', settings);
@@ -938,7 +932,6 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
           configDeepVisionEnabled={config.ui?.deepVisionEnabled !== false}
           configCmpEnabled={config.centralServer?.enabled ?? false}
           configCmpUrl={config.centralServer?.url ?? ''}
-          configVpnEnabled={config.vpn?.enabled ?? true}
           configTailscaleEnabled={config.tailscale?.enabled ?? true}
           configTailscaleMode={config.tailscale?.mode ?? 'inbound'}
           onClose={() => setShowSettings(false)}

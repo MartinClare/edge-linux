@@ -8,7 +8,7 @@ import MonitoringDashboard from './components/MonitoringDashboard';
 import GeminiPpeNarrative from './components/GeminiPpeNarrative';
 import VideoResultsDashboard from './components/VideoResultsDashboard';
 import VideoPlayer from './components/VideoPlayer';
-import AlarmObserverPanel from './components/AlarmObserverPanel';
+import SystemHealthPanel from './components/SystemHealthPanel';
 import { detectImageYOLO, detectRTSPYOLO } from './services/yoloApi';
 import { analyzeImageGemini, analyzeImageAlerts } from './services/geminiApi';
 import { YOLO_API_URL } from './config/api';
@@ -519,8 +519,7 @@ function App() {
             </div>
           )}
 
-          {/* Alarm Observer Panel - Shows active alarms and system status */}
-          <AlarmObserverPanel />
+          <SystemHealthPanel />
         </aside>
 
         <main className="main-content">

@@ -253,12 +253,15 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
+      // go2rtc ≥ 1.9.x expects the SDP offer as base64, and returns base64 SDP answer
+      const offerB64 = btoa(offer.sdp ?? '');
+
       const resp = await fetch(
         `${go2rtcUrl}/api/webrtc?src=${encodeURIComponent(cameraId)}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ data: JSON.stringify(offer) }),
+          body: new URLSearchParams({ data: offerB64 }),
           signal: AbortSignal.timeout(10_000),
         },
       );
@@ -266,7 +269,9 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
       if (!resp.ok) throw new Error(`go2rtc returned HTTP ${resp.status}`);
 
       const answerText = await resp.text();
-      const answer: RTCSessionDescriptionInit = JSON.parse(answerText);
+      // go2rtc returns base64-encoded SDP answer
+      const answerSdp = atob(answerText.trim());
+      const answer: RTCSessionDescriptionInit = { type: 'answer', sdp: answerSdp };
       await pc.setRemoteDescription(answer);
     } catch (err) {
       const msg = (err as Error).message;
