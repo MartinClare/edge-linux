@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getTranslations } from "next-intl/server";
 
 type CategoryRisk = {
   category: string;
@@ -9,11 +10,13 @@ type CategoryRisk = {
   latestSummary: string | null;
 };
 
-export function RiskBreakdown({ categories }: { categories: CategoryRisk[] }) {
+export async function RiskBreakdown({ categories }: { categories: CategoryRisk[] }) {
+  const t = await getTranslations("dashboard");
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm">Risk by Category</CardTitle>
+        <CardTitle className="text-sm">{t("riskByCategory")}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -27,7 +30,7 @@ export function RiskBreakdown({ categories }: { categories: CategoryRisk[] }) {
                 <div className="flex items-center gap-2">
                   {cat.openCount > 0 && (
                     <Badge variant="destructive" className="text-xs">
-                      {cat.openCount} open
+                      {t("openBadge", { count: cat.openCount })}
                     </Badge>
                   )}
                   {cat.latestRisk && (
@@ -47,7 +50,7 @@ export function RiskBreakdown({ categories }: { categories: CategoryRisk[] }) {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground line-clamp-2">
-                {cat.latestSummary ?? "No recent reports"}
+                {cat.latestSummary ?? t("noRecentReports")}
               </p>
             </div>
           ))}

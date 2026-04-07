@@ -18,6 +18,13 @@ export async function POST(request: Request) {
     const token = await signToken({ sub: user.id, email: user.email, name: user.name, role: user.role });
     const res = NextResponse.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } }, { status: 200 });
     setAuthCookie(res, token);
+    // Restore the user's saved locale preference from the DB
+    const locale = (user as { locale?: string }).locale ?? "en";
+    res.cookies.set("cmp-locale", locale, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+    });
     return res;
   } catch {
     return NextResponse.json({ message: "Failed to sign in" }, { status: 500 });

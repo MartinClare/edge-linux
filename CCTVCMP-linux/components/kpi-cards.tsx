@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getTranslations } from "next-intl/server";
 
 type KpiCardsProps = {
   edgeOnline: number;
@@ -9,20 +10,21 @@ type KpiCardsProps = {
   avgResponseTime: number;
 };
 
-export function KpiCards({ edgeOnline, edgeTotal, openIncidents, highCriticalRisk, avgResponseTime }: KpiCardsProps) {
+export async function KpiCards({ edgeOnline, edgeTotal, openIncidents, highCriticalRisk, avgResponseTime }: KpiCardsProps) {
+  const t = await getTranslations("dashboard");
   const cards = [
-    { title: "Edge Devices Online", value: `${edgeOnline} / ${edgeTotal}`, href: null },
+    { title: t("edgeDevicesOnline"), value: `${edgeOnline} / ${edgeTotal}`, href: null },
     {
-      title: "Open Incidents",
+      title: t("openIncidents"),
       value: openIncidents.toString(),
       href: openIncidents > 0 ? "/incidents?status=open" : null,
     },
     {
-      title: "High/Critical Risk",
+      title: t("highCriticalRisk"),
       value: highCriticalRisk.toString(),
       href: highCriticalRisk > 0 ? "/incidents?riskLevel=high,critical" : null,
     },
-    { title: "Avg Response Time", value: `${Math.round(avgResponseTime)}m`, href: null },
+    { title: t("avgResponseTime"), value: `${Math.round(avgResponseTime)}m`, href: null },
   ];
 
   return (

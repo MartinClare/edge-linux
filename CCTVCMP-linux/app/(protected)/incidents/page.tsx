@@ -3,6 +3,7 @@ import { IncidentTable } from "@/components/incidents/incident-table";
 import { AutoRefresh } from "@/components/auto-refresh";
 import type { IncidentStatus, IncidentRiskLevel } from "@prisma/client";
 import type { Detection } from "@/components/edge-devices/bounding-box-canvas";
+import { getTranslations } from "next-intl/server";
 
 const VALID_STATUSES: IncidentStatus[] = ["open", "acknowledged", "resolved", "dismissed", "record_only"];
 const VALID_RISKS: IncidentRiskLevel[] = ["low", "medium", "high", "critical"];
@@ -30,6 +31,7 @@ export default async function IncidentsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const t = await getTranslations("incidents");
   const params = await searchParams;
 
   const statusParam = typeof params.status === "string" ? params.status : undefined;
@@ -82,8 +84,8 @@ export default async function IncidentsPage({
   });
 
   const filterLabel = [
-    statusFilter?.length ? `Status: ${statusFilter.join(", ")}` : null,
-    riskFilter?.length ? `Risk: ${riskFilter.join(", ")}` : null,
+    statusFilter?.length ? statusFilter.join(", ") : null,
+    riskFilter?.length ? riskFilter.join(", ") : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -93,13 +95,13 @@ export default async function IncidentsPage({
       <AutoRefresh intervalSec={10} />
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold">Incident Management</h2>
+          <h2 className="text-2xl font-semibold">{t("title")}</h2>
           {filterLabel && (
             <p className="text-sm text-muted-foreground mt-1">
-              Filtered by: <span className="font-medium text-foreground">{filterLabel}</span>
+              {t("filteredBy")} <span className="font-medium text-foreground">{filterLabel}</span>
               &nbsp;·&nbsp;
               <a href="/incidents" className="text-primary hover:underline">
-                Clear filter
+                {t("clearFilter")}
               </a>
             </p>
           )}

@@ -5,6 +5,7 @@ import { RiskBreakdown } from "@/components/dashboard/risk-breakdown";
 import { AlertFeed } from "@/components/dashboard/alert-feed";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ONLINE_THRESHOLD_MS, shouldDisplayEdgeCamera } from "@/lib/camera-status";
+import { getTranslations } from "next-intl/server";
 
 const CATEGORY_MAP: Record<string, { category: string; icon: string }> = {
   ppe_violation: { category: "PPE", icon: "🪖" },
@@ -18,6 +19,7 @@ const CATEGORY_MAP: Record<string, { category: string; icon: string }> = {
 };
 
 export default async function DashboardPage() {
+  const t = await getTranslations("dashboard");
   const [incidents, metrics, cameras, recentIncidents] = await Promise.all([
     prisma.incident.findMany({ where: { NOT: { notes: "__test__" } } }),
     prisma.dailyMetric.findMany({ orderBy: { date: "desc" }, take: 14 }),
@@ -79,14 +81,15 @@ export default async function DashboardPage() {
   const riskCategories = Object.entries(categoryMeta).map(([category, { icon }]) => {
     const typesInCategory = Object.entries(CATEGORY_MAP)
       .filter(([, meta]) => meta.category === category)
-      .map(([t]) => t);
+      .map(([type]) => type);
     const categoryIncidents = incidents.filter((i) => typesInCategory.includes(i.type));
     const openCount = categoryIncidents.filter((i) => i.status === "open").length;
     const latest = categoryIncidents.sort(
       (a, b) => new Date(b.detectedAt).getTime() - new Date(a.detectedAt).getTime()
     )[0];
+    const categoryKey = category as "PPE" | "Construction" | "Fire" | "Security";
     return {
-      category,
+      category: t(`categories.${categoryKey}`),
       icon,
       openCount,
       latestRisk: latest?.riskLevel ?? null,
@@ -97,7 +100,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <AutoRefresh intervalSec={10} />
-      <h2 className="text-2xl font-semibold">Operational Dashboard</h2>
+      <h2 className="text-2xl font-semibold">{t("title")}</h2>
       <KpiCards
         edgeOnline={edgeOnline}
         edgeTotal={edgeDevices.length}

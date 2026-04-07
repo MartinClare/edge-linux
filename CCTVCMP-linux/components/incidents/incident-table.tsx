@@ -11,6 +11,7 @@ import { IncidentActions } from "@/components/incidents/incident-actions";
 import { BoundingBoxCanvas } from "@/components/edge-devices/bounding-box-canvas";
 import type { Detection } from "@/components/edge-devices/bounding-box-canvas";
 import { formatHKT } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 type IncidentRow = {
   id: string;
@@ -50,16 +51,18 @@ function statusColor(status: IncidentStatus): string {
   }
 }
 
-const FILTERS: Array<{ label: string; value: IncidentStatus | "all" }> = [
-  { label: "All", value: "all" },
-  { label: "Open", value: "open" },
-  { label: "Acknowledged", value: "acknowledged" },
-  { label: "Resolved", value: "resolved" },
-  { label: "Dismissed", value: "dismissed" },
-  { label: "Record Only", value: "record_only" },
-];
-
 export function IncidentTable({ incidents }: { incidents: IncidentRow[] }) {
+  const t = useTranslations("incidents");
+  const tCommon = useTranslations("common");
+  const FILTERS: Array<{ label: string; value: IncidentStatus | "all" }> = [
+    { label: t("filterAll"), value: "all" },
+    { label: t("filterOpen"), value: "open" },
+    { label: t("filterAcknowledged"), value: "acknowledged" },
+    { label: t("filterResolved"), value: "resolved" },
+    { label: t("filterDismissed"), value: "dismissed" },
+    { label: t("filterRecordOnly"), value: "record_only" },
+  ];
+
   const [filter, setFilter] = useState<IncidentStatus | "all">("all");
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
 
@@ -76,7 +79,7 @@ export function IncidentTable({ incidents }: { incidents: IncidentRow[] }) {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>Incident Tracking</CardTitle>
+          <CardTitle>{t("incidentTracking")}</CardTitle>
           <div className="flex gap-1">
             {FILTERS.map((f) => (
               <Button
@@ -100,22 +103,22 @@ export function IncidentTable({ incidents }: { incidents: IncidentRow[] }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Type</TableHead>
-              <TableHead>Risk</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Camera</TableHead>
-              <TableHead>Zone</TableHead>
-              <TableHead>Detected</TableHead>
-              <TableHead>Evidence</TableHead>
-              <TableHead>Assigned</TableHead>
-              <TableHead>Action</TableHead>
+              <TableHead>{t("colType")}</TableHead>
+              <TableHead>{t("colRisk")}</TableHead>
+              <TableHead>{t("colStatus")}</TableHead>
+              <TableHead>{t("colCamera")}</TableHead>
+              <TableHead>{t("colZone")}</TableHead>
+              <TableHead>{t("colDetected")}</TableHead>
+              <TableHead>{t("colEvidence")}</TableHead>
+              <TableHead>{t("colAssigned")}</TableHead>
+              <TableHead>{t("colAction")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 && (
               <TableRow>
                 <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
-                  No incidents found
+                  {t("noIncidentsFound")}
                 </TableCell>
               </TableRow>
             )}
@@ -126,18 +129,18 @@ export function IncidentTable({ incidents }: { incidents: IncidentRow[] }) {
                     href={`/incidents/${incident.id}`}
                     className="flex items-center gap-2 hover:underline focus:outline-none"
                   >
-                    <span>{incident.type.replaceAll("_", " ")}</span>
+                    <span>{t(`types.${incident.type}` as Parameters<typeof t>[0]) || incident.type.replaceAll("_", " ")}</span>
                     {incident.recordOnly && (
-                      <Badge variant="secondary" className="text-xs">record</Badge>
+                      <Badge variant="secondary" className="text-xs">{t("record")}</Badge>
                     )}
                   </Link>
                 </TableCell>
                 <TableCell>
-                  <Badge variant={riskVariant(incident.riskLevel)}>{incident.riskLevel}</Badge>
+                  <Badge variant={riskVariant(incident.riskLevel)}>{tCommon(`riskLevel.${incident.riskLevel}` as Parameters<typeof tCommon>[0])}</Badge>
                 </TableCell>
                 <TableCell>
                   <span className={statusColor(incident.status)}>
-                    {incident.status.replace("_", " ")}
+                    {tCommon(`status.${incident.status}` as Parameters<typeof tCommon>[0])}
                   </span>
                 </TableCell>
                 <TableCell>{incident.camera.name}</TableCell>
@@ -164,7 +167,7 @@ export function IncidentTable({ incidents }: { incidents: IncidentRow[] }) {
                       href={`/incidents/${incident.id}`}
                       className="inline-flex items-center rounded-md border border-primary/50 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
                     >
-                      View
+                      {t("view")}
                     </Link>
                     <IncidentActions incidentId={incident.id} currentStatus={incident.status} onStatusChange={onStatusChange} />
                   </div>

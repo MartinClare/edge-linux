@@ -69,6 +69,7 @@ model User {
   email          String   @unique
   hashedPassword String   @map("hashed_password")
   role           Role     @default(viewer)
+  locale         String   @default("en") @map("locale")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -207,6 +208,7 @@ model EdgeReport {
   classificationJson     Json?     @map("classification_json")
   cmpRiskLevel           String?   @map("cmp_risk_level")
   visionVerificationJson Json?     @map("vision_verification_json")
+  translationsJson       Json?     @map("translations_json")
   receivedAt             DateTime  @default(now()) @map("received_at")
 
   camera    Camera     @relation(fields: [cameraId], references: [id], onDelete: Cascade)

@@ -320,6 +320,30 @@ async function processReportBackground(
     });
 
     await evaluateAlarms(finalClassification, cameraContext, edgeReportId, detectedAt);
+
+    // ── Translate to Chinese and persist in translationsJson ─────────────────
+    // Runs after alarm evaluation so it never blocks incident creation.
+    // Failure is logged but does not surface to the edge device.
+    try {
+      const { translateReportToZh } = await import("@/lib/translator");
+      const translations = await translateReportToZh({
+        overallDescription: analysis.overallDescription ?? "",
+        classifications: finalClassification.classifications.map((c) => ({
+          type: c.type,
+          reasoning: c.reasoning,
+        })),
+        visionSummary: finalClassification.visionVerification?.summary,
+        visionMissedHazards: finalClassification.visionVerification?.missedHazards,
+        visionIncorrectClaims: finalClassification.visionVerification?.incorrectClaims,
+      });
+      await prisma.edgeReport.update({
+        where: { id: edgeReportId },
+        data: { translationsJson: translations as object },
+      });
+      console.log(`[webhook] Translations saved for report ${edgeReportId}`);
+    } catch (translationErr) {
+      console.error("[webhook] Translation failed for report", edgeReportId, translationErr);
+    }
   } catch (err) {
     console.error("[webhook] Background processing failed for report", edgeReportId, err);
   }

@@ -50,7 +50,7 @@
       }
     ],
     "fpsLimit": 15,
-    "geminiInterval": 5,
+    "geminiInterval": 600,
     "schedule": {
       "enabled": false,
       "dayStart": "07:00",

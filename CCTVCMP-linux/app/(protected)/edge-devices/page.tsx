@@ -2,8 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { EdgeDeviceList } from "@/components/edge-devices/edge-device-list";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ONLINE_THRESHOLD_MS, shouldDisplayEdgeCamera } from "@/lib/camera-status";
+import { getTranslations } from "next-intl/server";
 
 export default async function EdgeDevicesPage() {
+  const t = await getTranslations("edgeDevices");
   const cameras = await prisma.camera.findMany({
     include: {
       project: { select: { id: true, name: true } },
@@ -79,9 +81,9 @@ export default async function EdgeDevicesPage() {
     <div className="space-y-6">
       <AutoRefresh intervalSec={10} />
       <div>
-        <h2 className="text-2xl font-semibold">Edge Devices</h2>
+        <h2 className="text-2xl font-semibold">{t("title")}</h2>
         <p className="text-sm text-muted-foreground">
-          {onlineCount} online / {devices.length} total
+          {t("onlineCount", { online: onlineCount, total: devices.length })}
         </p>
       </div>
       <EdgeDeviceList devices={devices} />

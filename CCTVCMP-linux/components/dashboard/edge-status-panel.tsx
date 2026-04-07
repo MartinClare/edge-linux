@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatHKT } from "@/lib/utils";
+import { getTranslations } from "next-intl/server";
 
 type DeviceStatus = {
   id: string;
@@ -15,14 +16,16 @@ type DeviceStatus = {
   latestDescription: string | null;
 };
 
-export function EdgeStatusPanel({ devices }: { devices: DeviceStatus[] }) {
+export async function EdgeStatusPanel({ devices }: { devices: DeviceStatus[] }) {
+  const t = await getTranslations("dashboard");
+
   if (devices.length === 0) {
     return (
       <Card>
-        <CardHeader><CardTitle className="text-sm">Edge Devices</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-sm">{t("edgeDevicesLabel")}</CardTitle></CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground text-center py-4">
-            No edge devices registered yet. They will appear here when they send their first report.
+            {t("noDevicesYet")}
           </p>
         </CardContent>
       </Card>
@@ -32,7 +35,7 @@ export function EdgeStatusPanel({ devices }: { devices: DeviceStatus[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm">Edge Device Status</CardTitle>
+        <CardTitle className="text-sm">{t("edgeDeviceStatus")}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -83,8 +86,8 @@ export function EdgeStatusPanel({ devices }: { devices: DeviceStatus[] }) {
               )}
               <p className="text-xs text-muted-foreground">
                 {d.lastReportAt
-                  ? `Last report: ${formatHKT(d.lastReportAt)}`
-                  : "No reports yet"}
+                  ? t("lastReport", { time: formatHKT(d.lastReportAt) })
+                  : t("noReportsYet")}
               </p>
             </Link>
           ))}

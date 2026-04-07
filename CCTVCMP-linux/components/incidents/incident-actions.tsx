@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import type { IncidentStatus } from "@prisma/client";
+import { useTranslations } from "next-intl";
 
 type Props = {
   incidentId: string;
@@ -12,6 +13,7 @@ type Props = {
 };
 
 export function IncidentActions({ incidentId, currentStatus, onStatusChange }: Props) {
+  const t = useTranslations("incidents");
   const router = useRouter();
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export function IncidentActions({ incidentId, currentStatus, onStatusChange }: P
     currentStatus === "dismissed" ||
     currentStatus === "record_only"
   ) {
-    return <span className="text-xs text-muted-foreground">No actions</span>;
+    return <span className="text-xs text-muted-foreground">{t("noActions")}</span>;
   }
 
   return (
@@ -63,7 +65,7 @@ export function IncidentActions({ incidentId, currentStatus, onStatusChange }: P
             onClick={() => updateStatus("acknowledged")}
             disabled={pending !== null}
           >
-            {pending === "acknowledged" ? "..." : "Acknowledge"}
+            {pending === "acknowledged" ? "..." : t("acknowledge")}
           </Button>
         )}
         {(currentStatus === "open" || currentStatus === "acknowledged") && (
@@ -73,7 +75,7 @@ export function IncidentActions({ incidentId, currentStatus, onStatusChange }: P
             onClick={() => updateStatus("resolved")}
             disabled={pending !== null}
           >
-            {pending === "resolved" ? "..." : "Resolve"}
+            {pending === "resolved" ? "..." : t("resolve")}
           </Button>
         )}
         {(currentStatus === "open" || currentStatus === "acknowledged") && (
@@ -83,7 +85,7 @@ export function IncidentActions({ incidentId, currentStatus, onStatusChange }: P
             onClick={() => updateStatus("dismissed")}
             disabled={pending !== null}
           >
-            {pending === "dismissed" ? "..." : "Dismiss"}
+            {pending === "dismissed" ? "..." : t("dismiss")}
           </Button>
         )}
       </div>

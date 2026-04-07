@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatHKT } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 type Device = {
   id: string;
@@ -64,12 +65,12 @@ function DeviceSnapshot({ deviceId, name }: { deviceId: string; name: string }) 
   );
 }
 
-function StatusDot({ device }: { device: Device }) {
+function StatusDot({ device, t }: { device: Device; t: ReturnType<typeof useTranslations<"edgeDevices">> }) {
   if (device.status === "maintenance") {
     return (
       <span className="flex items-center gap-1.5 text-xs text-yellow-400 font-medium">
         <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
-        Maintenance
+        {t("statusMaintenance")}
       </span>
     );
   }
@@ -77,7 +78,7 @@ function StatusDot({ device }: { device: Device }) {
     return (
       <span className="flex items-center gap-1.5 text-xs text-yellow-400 font-medium">
         <span className="h-2.5 w-2.5 rounded-full bg-yellow-400 animate-pulse" />
-        Stream Issue
+        {t("statusStreamIssue")}
       </span>
     );
   }
@@ -85,14 +86,14 @@ function StatusDot({ device }: { device: Device }) {
     return (
       <span className="flex items-center gap-1.5 text-xs text-green-400 font-medium">
         <span className="h-2.5 w-2.5 rounded-full bg-green-400 animate-pulse" />
-        Online
+        {t("statusOnline")}
       </span>
     );
   }
   return (
     <span className="flex items-center gap-1.5 text-xs text-red-400 font-medium">
       <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-      Offline
+      {t("statusOffline")}
     </span>
   );
 }
@@ -105,11 +106,13 @@ function riskBadge(level: string) {
 }
 
 export function EdgeDeviceList({ devices }: { devices: Device[] }) {
+  const t = useTranslations("edgeDevices");
+
   if (devices.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-12 text-center text-muted-foreground">
-        <p className="text-lg font-medium mb-1">No edge devices registered</p>
-        <p className="text-sm">Devices auto-register when they send their first report to the CMP.</p>
+        <p className="text-lg font-medium mb-1">{t("noDevicesRegistered")}</p>
+        <p className="text-sm">{t("noDevicesSubtext")}</p>
       </div>
     );
   }
@@ -130,7 +133,7 @@ export function EdgeDeviceList({ devices }: { devices: Device[] }) {
               )}
               {/* Status dot */}
               <div className="absolute top-2 left-2 rounded-full bg-background/80 px-2 py-0.5 backdrop-blur-sm">
-                <StatusDot device={d} />
+                <StatusDot device={d} t={t} />
               </div>
             </div>
 
@@ -161,11 +164,11 @@ export function EdgeDeviceList({ devices }: { devices: Device[] }) {
               {/* Footer stats */}
               <div className="flex items-center justify-between pt-1 border-t border-border/50">
                 <span className="text-xs text-muted-foreground">
-                  {d.lastReportAt ? formatHKT(d.lastReportAt) : "Never"}
+                  {d.lastReportAt ? formatHKT(d.lastReportAt) : t("never")}
                 </span>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span title="Reports">{d.reportCount} rpt</span>
-                  <span title="Incidents">{d.incidentCount} inc</span>
+                  <span>{d.reportCount} {t("rptLabel")}</span>
+                  <span>{d.incidentCount} {t("incLabel")}</span>
                 </div>
               </div>
             </CardContent>

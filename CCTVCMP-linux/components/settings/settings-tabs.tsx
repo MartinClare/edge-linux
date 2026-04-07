@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { EdgeIntegrationHelp } from "@/components/settings/edge-integration-help";
+import { useTranslations } from "next-intl";
 
 type AlarmRule = {
   id: string;
@@ -34,31 +35,32 @@ type Channel = {
 const CRITICAL_ALERT_TYPES = ["ppe_violation", "smoking", "fire_detected", "machinery_hazard"];
 
 export function SettingsTabs({ rules, channels }: { rules: AlarmRule[]; channels: Channel[] }) {
+  const t = useTranslations("settings");
   const [tab, setTab] = useState<"critical" | "rules" | "channels" | "edge">("critical");
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         <Button variant={tab === "critical" ? "default" : "outline"} onClick={() => setTab("critical")}>
-          Critical Alerts
+          {t("tabCritical")}
         </Button>
         <Button variant={tab === "rules" ? "default" : "outline"} onClick={() => setTab("rules")}>
-          All Alarm Rules
+          {t("tabRules")}
         </Button>
         <Button variant={tab === "channels" ? "default" : "outline"} onClick={() => setTab("channels")}>
-          Notification Channels
+          {t("tabChannels")}
         </Button>
         <Button variant={tab === "edge" ? "default" : "outline"} onClick={() => setTab("edge")}>
-          Edge connection (PPE-UI)
+          {t("tabEdge")}
         </Button>
       </div>
 
       {tab === "critical" ? (
-        <CriticalAlertsTab rules={rules.filter((r) => CRITICAL_ALERT_TYPES.includes(r.incidentType))} />
+        <CriticalAlertsTab rules={rules.filter((r) => CRITICAL_ALERT_TYPES.includes(r.incidentType))} t={t} />
       ) : tab === "rules" ? (
-        <AlarmRulesTab rules={rules} />
+        <AlarmRulesTab rules={rules} t={t} />
       ) : tab === "channels" ? (
-        <NotificationChannelsTab channels={channels} />
+        <NotificationChannelsTab channels={channels} t={t} />
       ) : (
         <EdgeIntegrationHelp />
       )}
@@ -66,14 +68,9 @@ export function SettingsTabs({ rules, channels }: { rules: AlarmRule[]; channels
   );
 }
 
-const CRITICAL_LABELS: Record<string, { label: string; description: string }> = {
-  ppe_violation:    { label: "PPE Violation",    description: "Someone on site without required hard hat or hi-vis vest" },
-  smoking:          { label: "Smoking",           description: "Smoking detected on site" },
-  fire_detected:    { label: "Fire Detected",     description: "Active flame or fire visible" },
-  machinery_hazard: { label: "Machinery Hazard",  description: "Worker too close to operating machinery" },
-};
+type TFn = ReturnType<typeof useTranslations<"settings">>;
 
-function CriticalAlertsTab({ rules }: { rules: AlarmRule[] }) {
+function CriticalAlertsTab({ rules, t }: { rules: AlarmRule[]; t: TFn }) {
   const [saving, setSaving] = useState<string | null>(null);
   const [values, setValues] = useState<Record<string, number>>(
     Object.fromEntries(rules.map((r) => [r.id, r.dedupMinutes]))
@@ -95,39 +92,34 @@ function CriticalAlertsTab({ rules }: { rules: AlarmRule[] }) {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <span className="inline-block h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
-            Critical Safety Alerts
+            {t("criticalTitle")}
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            These four incident types trigger an immediate blocking popup in the CMP UI so
-            operators cannot miss them. A cooldown prevents duplicate popups for the same camera
-            within the configured window. The popup reappears automatically when a new event
-            occurs after the cooldown expires.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("criticalDesc")}</p>
         </CardHeader>
         <CardContent className="space-y-4">
           {rules.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Rules not yet seeded — trigger a webhook report to auto-create them.
-            </p>
+            <p className="text-sm text-muted-foreground">{t("rulesNotSeeded")}</p>
           )}
           {rules.map((rule) => {
-            const meta = CRITICAL_LABELS[rule.incidentType];
+            const typeKey = rule.incidentType as "ppe_violation" | "smoking" | "fire_detected" | "machinery_hazard";
+            const label = t(`criticalLabels.${typeKey}.label`);
+            const description = t(`criticalLabels.${typeKey}.description`);
             return (
               <div
                 key={rule.id}
                 className="flex items-center justify-between gap-4 rounded-lg border border-orange-500/20 bg-orange-950/20 p-4"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm">{meta?.label ?? rule.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{meta?.description}</p>
+                  <p className="font-semibold text-sm">{label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
                   <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="destructive" className="text-xs">HIGH risk floor</Badge>
-                    <Badge variant="outline" className="text-xs">Popup enabled</Badge>
+                    <Badge variant="destructive" className="text-xs">{t("riskFloor")}</Badge>
+                    <Badge variant="outline" className="text-xs">{t("popupEnabled")}</Badge>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <div className="text-right">
-                    <p className="text-xs text-muted-foreground mb-1">Cooldown (minutes)</p>
+                    <p className="text-xs text-muted-foreground mb-1">{t("cooldownMinutes")}</p>
                     <Input
                       type="number"
                       min="1"
@@ -145,7 +137,7 @@ function CriticalAlertsTab({ rules }: { rules: AlarmRule[] }) {
                     onClick={() => saveCooldown(rule.id)}
                     className="mt-5"
                   >
-                    {saving === rule.id ? "Saving…" : "Save"}
+                    {saving === rule.id ? t("saving") : t("save")}
                   </Button>
                 </div>
               </div>
@@ -157,7 +149,8 @@ function CriticalAlertsTab({ rules }: { rules: AlarmRule[] }) {
   );
 }
 
-function AlarmRulesTab({ rules }: { rules: AlarmRule[] }) {
+function AlarmRulesTab({ rules, t }: { rules: AlarmRule[]; t: TFn }) {
+  const tCommon = useTranslations("common");
   const [saving, setSaving] = useState<string | null>(null);
 
   async function toggle(id: string, field: "enabled" | "recordOnly", current: boolean) {
@@ -182,22 +175,20 @@ function AlarmRulesTab({ rules }: { rules: AlarmRule[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Alarm Rules</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Configure when each incident type should trigger an alarm. Rules are auto-seeded for all types.
-        </p>
+        <CardTitle className="text-lg">{t("alarmRulesTitle")}</CardTitle>
+        <p className="text-sm text-muted-foreground">{t("alarmRulesDesc")}</p>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Type</TableHead>
-              <TableHead>Min Risk</TableHead>
-              <TableHead>Min Confidence</TableHead>
-              <TableHead>Consecutive</TableHead>
-              <TableHead>Dedup (min)</TableHead>
-              <TableHead>Enabled</TableHead>
-              <TableHead>Record Only</TableHead>
+              <TableHead>{t("colType")}</TableHead>
+              <TableHead>{t("colMinRisk")}</TableHead>
+              <TableHead>{t("colMinConfidence")}</TableHead>
+              <TableHead>{t("colConsecutive")}</TableHead>
+              <TableHead>{t("colDedup")}</TableHead>
+              <TableHead>{t("colEnabled")}</TableHead>
+              <TableHead>{t("colRecordOnly")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -210,10 +201,9 @@ function AlarmRulesTab({ rules }: { rules: AlarmRule[] }) {
                     defaultValue={rule.minRiskLevel}
                     onChange={(e) => updateField(rule.id, "minRiskLevel", e.target.value)}
                   >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
+                    {(["low", "medium", "high", "critical"] as const).map((r) => (
+                      <option key={r} value={r}>{tCommon(`riskLevel.${r}`)}</option>
+                    ))}
                   </select>
                 </TableCell>
                 <TableCell>
@@ -252,7 +242,7 @@ function AlarmRulesTab({ rules }: { rules: AlarmRule[] }) {
                     disabled={saving === rule.id}
                     onClick={() => toggle(rule.id, "enabled", rule.enabled)}
                   >
-                    {rule.enabled ? "On" : "Off"}
+                    {rule.enabled ? t("on") : t("off")}
                   </Button>
                 </TableCell>
                 <TableCell>
@@ -262,7 +252,7 @@ function AlarmRulesTab({ rules }: { rules: AlarmRule[] }) {
                     disabled={saving === rule.id}
                     onClick={() => toggle(rule.id, "recordOnly", rule.recordOnly)}
                   >
-                    {rule.recordOnly ? "Yes" : "No"}
+                    {rule.recordOnly ? t("yes") : t("no")}
                   </Button>
                 </TableCell>
               </TableRow>
@@ -283,9 +273,11 @@ function isValidEmail(v: string) {
 function EmailRecipientsInput({
   addresses,
   onChange,
+  t,
 }: {
   addresses: string[];
   onChange: (a: string[]) => void;
+  t: TFn;
 }) {
   const [draft, setDraft] = useState("");
 
@@ -308,7 +300,7 @@ function EmailRecipientsInput({
 
   return (
     <div className="space-y-2">
-      <label className="text-xs text-muted-foreground">Recipient addresses</label>
+      <label className="text-xs text-muted-foreground">{t("recipientAddresses")}</label>
       {addresses.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {addresses.map((addr) => (
@@ -349,17 +341,16 @@ function EmailRecipientsInput({
           onClick={addDraft}
           disabled={!draft.trim() || !isValidEmail(draft)}
         >
-          Add
+          {t("addEmail")}
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground/60">
-        Press Enter or click Add after each address. SMTP is configured centrally on the server.
-      </p>
+      <p className="text-xs text-muted-foreground/60">{t("smtpNote")}</p>
     </div>
   );
 }
 
-function ChannelConfigEditor({ channel }: { channel: Channel }) {
+function ChannelConfigEditor({ channel, t }: { channel: Channel; t: TFn }) {
+  const tCommon = useTranslations("common");
   const cfg = (channel.config ?? {}) as Record<string, unknown>;
   const [addresses, setAddresses] = useState<string[]>(
     Array.isArray(cfg.to)
@@ -388,30 +379,29 @@ function ChannelConfigEditor({ channel }: { channel: Channel }) {
   return (
     <div className="mt-3 space-y-3 border-t pt-3">
       <div className="flex items-center gap-3">
-        <label className="text-xs text-muted-foreground whitespace-nowrap">Min risk level</label>
+        <label className="text-xs text-muted-foreground whitespace-nowrap">{t("minRiskLabel")}</label>
         <select
           className="rounded border bg-background px-2 py-1 text-sm"
           value={minRisk}
           onChange={(e) => setMinRisk(e.target.value)}
         >
           {RISK_LEVELS.map((r) => (
-            <option key={r} value={r}>
-              {r.charAt(0).toUpperCase() + r.slice(1)}
-            </option>
+            <option key={r} value={r}>{tCommon(`riskLevel.${r}`)}</option>
           ))}
         </select>
       </div>
       {channel.type === "email" && (
-        <EmailRecipientsInput addresses={addresses} onChange={setAddresses} />
+        <EmailRecipientsInput addresses={addresses} onChange={setAddresses} t={t} />
       )}
       <Button size="sm" onClick={save} disabled={saving}>
-        {saved ? "Saved ✓" : saving ? "Saving..." : "Save"}
+        {saved ? t("saved") : saving ? t("saving") : t("save")}
       </Button>
     </div>
   );
 }
 
-function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
+function NotificationChannelsTab({ channels, t }: { channels: Channel[]; t: TFn }) {
+  const tCommon = useTranslations("common");
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [type, setType] = useState<"email" | "webhook" | "dashboard">("email");
@@ -484,7 +474,7 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
   }
 
   async function deleteChannel(id: string) {
-    if (!confirm("Delete this notification channel?")) return;
+    if (!confirm(t("deleteConfirm"))) return;
     await fetch(`/api/notification-channels/${id}`, { method: "DELETE" });
     window.location.reload();
   }
@@ -493,12 +483,12 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
     const cfg = (ch.config ?? {}) as Record<string, unknown>;
     if (ch.type === "email") {
       const to = Array.isArray(cfg.to) ? (cfg.to as string[]).join(", ") : (cfg.to as string);
-      return to ? `→ ${to}` : "⚠ No recipient configured";
+      return to ? `→ ${to}` : t("noRecipient");
     }
     if (ch.type === "webhook") {
-      return (cfg.url as string) ? `→ ${cfg.url}` : "⚠ No URL configured";
+      return (cfg.url as string) ? `→ ${cfg.url}` : t("noUrl");
     }
-    return "In-app dashboard alerts";
+    return t("inAppAlerts");
   }
 
   return (
@@ -506,13 +496,11 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-lg">Notification Channels</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Configure where incident alerts are sent. Each channel can have its own minimum risk threshold.
-            </p>
+            <CardTitle className="text-lg">{t("channelsTitle")}</CardTitle>
+            <p className="text-sm text-muted-foreground">{t("channelsDesc")}</p>
           </div>
           <Button size="sm" onClick={() => setCreating(!creating)}>
-            {creating ? "Cancel" : "Add Channel"}
+            {creating ? t("cancel") : t("addChannel")}
           </Button>
         </div>
       </CardHeader>
@@ -521,7 +509,7 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
           <div className="rounded-md border p-4 space-y-4">
             <div className="flex items-end gap-3 flex-wrap">
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Channel Name</label>
+                <label className="text-xs text-muted-foreground">{t("channelName")}</label>
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -530,7 +518,7 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Type</label>
+                <label className="text-xs text-muted-foreground">{t("typeLabel")}</label>
                 <select
                   className="rounded border bg-background px-3 py-2 text-sm"
                   value={type}
@@ -542,33 +530,29 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Min Risk Level</label>
+                <label className="text-xs text-muted-foreground">{t("minRiskLevel")}</label>
                 <select
                   className="rounded border bg-background px-3 py-2 text-sm"
                   value={minRisk}
                   onChange={(e) => setMinRisk(e.target.value as typeof minRisk)}
                 >
                   {RISK_LEVELS.map((r) => (
-                    <option key={r} value={r}>
-                      {r.charAt(0).toUpperCase() + r.slice(1)}
-                    </option>
+                    <option key={r} value={r}>{tCommon(`riskLevel.${r}`)}</option>
                   ))}
                 </select>
               </div>
             </div>
             {type === "email" && (
-              <EmailRecipientsInput addresses={addresses} onChange={setAddresses} />
+              <EmailRecipientsInput addresses={addresses} onChange={setAddresses} t={t} />
             )}
             <Button onClick={createChannel} disabled={saving || !name}>
-              {saving ? "Creating..." : "Create Channel"}
+              {saving ? t("creating") : t("createChannel")}
             </Button>
           </div>
         )}
 
         {channels.length === 0 && !creating && (
-          <p className="text-sm text-muted-foreground text-center py-8">
-            No notification channels configured. Add one to start receiving alerts.
-          </p>
+          <p className="text-sm text-muted-foreground text-center py-8">{t("noChannels")}</p>
         )}
 
         {channels.map((ch) => (
@@ -586,12 +570,12 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
                   }
                   className="text-xs"
                 >
-                  ≥ {ch.minRiskLevel}
+                  ≥ {tCommon(`riskLevel.${ch.minRiskLevel}` as Parameters<typeof tCommon>[0])}
                 </Badge>
                 <div>
                   <p className="font-medium text-sm">{ch.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {channelSummary(ch)} &middot; {ch._count.logs} sent
+                    {channelSummary(ch)} &middot; {ch._count.logs} {t("sent")}
                   </p>
                 </div>
               </div>
@@ -601,7 +585,7 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
                   variant="outline"
                   onClick={() => setExpandedId(expandedId === ch.id ? null : ch.id)}
                 >
-                  {expandedId === ch.id ? "Close" : "Edit"}
+                  {expandedId === ch.id ? t("close") : t("edit")}
                 </Button>
                 {/* Hidden file input for this channel */}
                 <input
@@ -622,7 +606,7 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
                   🖼
                   {testImages[ch.id]
                     ? <span className="max-w-[80px] truncate text-xs">{testImages[ch.id].name}</span>
-                    : <span className="text-xs text-muted-foreground">Image</span>}
+                    : <span className="text-xs text-muted-foreground">{t("image")}</span>}
                 </Button>
                 {testImages[ch.id] && (
                   <button
@@ -640,14 +624,14 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
                   disabled={testingId === ch.id}
                   onClick={() => sendTest(ch.id)}
                 >
-                  {testingId === ch.id ? "Sending..." : "Test"}
+                  {testingId === ch.id ? t("sending") : t("test")}
                 </Button>
                 <Button
                   size="sm"
                   variant={ch.enabled ? "default" : "outline"}
                   onClick={() => toggleEnabled(ch.id, ch.enabled)}
                 >
-                  {ch.enabled ? "Enabled" : "Disabled"}
+                  {ch.enabled ? t("enabled") : t("disabled")}
                 </Button>
                 <Button
                   size="sm"
@@ -655,11 +639,11 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
                   className="text-red-400"
                   onClick={() => deleteChannel(ch.id)}
                 >
-                  Delete
+                  {t("delete")}
                 </Button>
               </div>
             </div>
-            {expandedId === ch.id && <ChannelConfigEditor channel={ch} />}
+            {expandedId === ch.id && <ChannelConfigEditor channel={ch} t={t} />}
           </div>
         ))}
       </CardContent>

@@ -44,7 +44,15 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL("/signin", request.url));
   }
 
-  return NextResponse.next();
+  // Forward the locale cookie as a request header so next-intl server
+  // components can read it even inside Route Handlers where cookies() is
+  // not available in some Next.js versions.
+  const response = NextResponse.next();
+  const localeCookie = request.cookies.get("cmp-locale")?.value;
+  if (localeCookie) {
+    response.headers.set("x-cmp-locale", localeCookie);
+  }
+  return response;
 }
 
 export const config = {

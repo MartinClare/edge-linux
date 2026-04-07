@@ -9,6 +9,8 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { BoundingBoxCanvas } from "@/components/edge-devices/bounding-box-canvas";
 import type { Detection } from "@/components/edge-devices/bounding-box-canvas";
 import { formatHKT } from "@/lib/utils";
+import { getTranslations, getLocale } from "next-intl/server";
+import type { TranslationsJson } from "@/lib/translator";
 
 function extractDetections(rawJson: unknown): Detection[] {
   if (!rawJson || typeof rawJson !== "object") return [];
@@ -76,45 +78,52 @@ function accuracyColor(acc: string) {
 }
 
 export default async function IncidentDetailPage({ params }: { params: { id: string } }) {
-  const incident = await prisma.incident.findUnique({
-    where: { id: params.id },
-    include: {
-      project: true,
-      camera: true,
-      zone: true,
-      assignee: true,
-      edgeReport: {
-        select: {
-          id: true,
-          eventImagePath: true,
-          overallRiskLevel: true,
-          overallDescription: true,
-          constructionSafety: true,
-          fireSafety: true,
-          propertySecurity: true,
-          peopleCount: true,
-          missingHardhats: true,
-          missingVests: true,
-          classificationJson: true,
-          visionVerificationJson: true,
-          receivedAt: true,
-          rawJson: true,
+  const [incident, t, locale] = await Promise.all([
+    prisma.incident.findUnique({
+      where: { id: params.id },
+      include: {
+        project: true,
+        camera: true,
+        zone: true,
+        assignee: true,
+        edgeReport: {
+          select: {
+            id: true,
+            eventImagePath: true,
+            overallRiskLevel: true,
+            overallDescription: true,
+            constructionSafety: true,
+            fireSafety: true,
+            propertySecurity: true,
+            peopleCount: true,
+            missingHardhats: true,
+            missingVests: true,
+            classificationJson: true,
+            visionVerificationJson: true,
+            translationsJson: true,
+            receivedAt: true,
+            rawJson: true,
+          },
+        },
+        logs: {
+          include: { user: { select: { name: true } } },
+          orderBy: { timestamp: "asc" },
+        },
+        notificationLogs: {
+          include: { channel: { select: { name: true, type: true } } },
+          orderBy: { sentAt: "desc" },
         },
       },
-      logs: {
-        include: { user: { select: { name: true } } },
-        orderBy: { timestamp: "asc" },
-      },
-      notificationLogs: {
-        include: { channel: { select: { name: true, type: true } } },
-        orderBy: { sentAt: "desc" },
-      },
-    },
-  });
+    }),
+    getTranslations("incidents"),
+    getLocale(),
+  ]);
 
   if (!incident) notFound();
 
   const evidence = incident.edgeReport;
+  const translations = (evidence?.translationsJson ?? null) as TranslationsJson | null;
+  const isZh = locale === "zh";
 
   const riskColor = incident.riskLevel === "critical" || incident.riskLevel === "high"
     ? "destructive" as const
@@ -128,6 +137,34 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
   const constructionSafety = normalizeSafetySection(evidence?.constructionSafety);
   const fireSafety = normalizeSafetySection(evidence?.fireSafety);
   const propertySecurity = normalizeSafetySection(evidence?.propertySecurity);
+
+  // Helper: get the Chinese reasoning for a classification type if available
+  function getReasoningZh(type: string, fallback: string): string {
+    if (!isZh || !translations?.classifications) return fallback;
+    const match = translations.classifications.find((c) => c.type === type);
+    return match?.reasoning || fallback;
+  }
+
+  const overallDescriptionText = (isZh && translations?.overallDescription)
+    ? translations.overallDescription
+    : (evidence?.overallDescription ?? "");
+
+  // CMP Reasoning: look up Chinese reasoning for this specific incident type
+  const reasoningText = (isZh && incident.reasoning)
+    ? getReasoningZh(incident.type, incident.reasoning)
+    : (incident.reasoning || "");
+
+  const visionSummaryText = (isZh && translations?.visionSummary)
+    ? translations.visionSummary
+    : (visionVerif?.summary ?? "");
+
+  const missedHazardsArr = (isZh && translations?.visionMissedHazards?.length)
+    ? translations.visionMissedHazards
+    : (visionVerif?.missedHazards ?? []);
+
+  const incorrectClaimsArr = (isZh && translations?.visionIncorrectClaims?.length)
+    ? translations.visionIncorrectClaims
+    : (visionVerif?.incorrectClaims ?? []);
 
   return (
     <div className="space-y-6">
@@ -146,7 +183,7 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
         <div className="flex items-center gap-3">
           <Badge variant={riskColor}>{incident.riskLevel}</Badge>
           <Badge variant="outline">{incident.status.replace("_", " ")}</Badge>
-          {incident.recordOnly && <Badge variant="secondary">record only</Badge>}
+          {incident.recordOnly && <Badge variant="secondary">{t("recordOnly")}</Badge>}
           <IncidentActions incidentId={incident.id} currentStatus={incident.status} />
         </div>
       </div>
@@ -154,21 +191,21 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
       {/* Details + CMP Reasoning */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
-          <CardHeader><CardTitle className="text-sm">Details</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm">{t("details")}</CardTitle></CardHeader>
           <CardContent className="space-y-2 text-sm">
-            <Row label="Detected" value={formatHKT(incident.detectedAt)} />
-            {incident.acknowledgedAt && <Row label="Acknowledged" value={formatHKT(incident.acknowledgedAt)} />}
-            {incident.resolvedAt && <Row label="Resolved" value={formatHKT(incident.resolvedAt)} />}
-            {incident.dismissedAt && <Row label="Dismissed" value={formatHKT(incident.dismissedAt)} />}
-            <Row label="Assigned To" value={incident.assignee?.name ?? "Unassigned"} />
+            <Row label={t("detectedAt")} value={formatHKT(incident.detectedAt)} />
+            {incident.acknowledgedAt && <Row label={t("acknowledgedAt")} value={formatHKT(incident.acknowledgedAt)} />}
+            {incident.resolvedAt && <Row label={t("resolvedAt")} value={formatHKT(incident.resolvedAt)} />}
+            {incident.dismissedAt && <Row label={t("dismissedAt")} value={formatHKT(incident.dismissedAt)} />}
+            <Row label={t("assignedTo")} value={incident.assignee?.name ?? t("common.unassigned")} />
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-sm">CMP Reasoning</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm">{t("reasoning")}</CardTitle></CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-              {incident.reasoning || "No reasoning available."}
+              {reasoningText || t("noReasoning")}
             </p>
           </CardContent>
         </Card>
@@ -176,7 +213,7 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
 
       {/* Notes */}
       <Card>
-        <CardHeader><CardTitle className="text-sm">Notes</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-sm">{t("notes")}</CardTitle></CardHeader>
         <CardContent>
           <IncidentNotes incidentId={incident.id} currentNotes={incident.notes} />
         </CardContent>
@@ -186,7 +223,7 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
-            Evidence Image
+            {t("evidenceImage")}
             {evidence && (
               <Badge variant={riskVariant(evidence.overallRiskLevel)} className="text-xs">
                 Edge: {evidence.overallRiskLevel}
@@ -202,32 +239,27 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
         <CardContent>
           {evidence?.eventImagePath ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-              {/* Image */}
               <BoundingBoxCanvas
                 imageUrl={evidence.eventImagePath}
                 detections={extractDetections(evidence.rawJson)}
                 maxHeight="480px"
               />
-
-              {/* Metadata */}
               <div className="space-y-4">
-                {/* Overall description */}
-                {evidence.overallDescription && (
+                {overallDescriptionText && (
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    {evidence.overallDescription}
+                    {overallDescriptionText}
                   </p>
                 )}
-
                 <Link
                   href={`/incidents/edge-report/${evidence.id}`}
                   className="text-xs text-primary hover:underline"
                 >
-                  View full edge report →
+                  {t("viewFullReport")}
                 </Link>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No evidence image available for this incident.</p>
+            <p className="text-sm text-muted-foreground">{t("noEvidence")}</p>
           )}
         </CardContent>
       </Card>
@@ -235,7 +267,7 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
       {/* Edge safety analysis sections */}
       {(constructionSafety || fireSafety || propertySecurity) && (
         <Card>
-          <CardHeader><CardTitle className="text-sm">Edge Safety Analysis</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm">{t("edgeSafetyAnalysis")}</CardTitle></CardHeader>
           <CardContent className="space-y-5">
             {[
               { label: "Construction Safety", data: constructionSafety, color: "text-orange-400" },
@@ -266,7 +298,7 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
         <Card className="border-primary/20">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
-              CMP Classification
+              {t("cmpClassification")}
               {cmpClassification.source && (
                 <span className="text-xs font-normal text-muted-foreground">
                   via {cmpClassification.source}
@@ -275,40 +307,40 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Detected incidents */}
             {detectedByLLM.length > 0 ? (
               <div className="space-y-2">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Detected</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("detected")}</p>
                 {detectedByLLM.map((c, i) => (
                   <div key={i} className="rounded-md border bg-muted/20 p-3 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant={riskVariant(c.riskLevel)} className="text-xs">{c.riskLevel}</Badge>
                       <span className="font-mono text-xs font-semibold">{c.type.replace(/_/g, " ")}</span>
                       <span className="text-xs text-muted-foreground ml-auto">
-                        {Math.round(c.confidence * 100)}% confidence
+                        {Math.round(c.confidence * 100)}%
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{c.reasoning}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {getReasoningZh(c.type, c.reasoning)}
+                    </p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No violations detected by CMP classifier.</p>
+              <p className="text-sm text-muted-foreground">{t("notDetected")}</p>
             )}
 
-            {/* Non-detected classifications (collapsed) */}
             {allClassifications.length > detectedByLLM.length && (
               <details className="group">
                 <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground list-none">
-                  <span className="group-open:hidden">▶ Show all {allClassifications.length} checks</span>
-                  <span className="hidden group-open:block">▼ Hide</span>
+                  <span className="group-open:hidden">▶ {t("showAllChecks", { count: allClassifications.length })}</span>
+                  <span className="hidden group-open:block">▼ {t("hide")}</span>
                 </summary>
                 <div className="mt-2 space-y-1.5">
                   {allClassifications.filter((c) => !c.detected).map((c, i) => (
                     <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground py-1 border-b last:border-0">
-                      <Badge variant="secondary" className="text-xs shrink-0">not detected</Badge>
+                      <Badge variant="secondary" className="text-xs shrink-0">—</Badge>
                       <span className="font-mono">{c.type.replace(/_/g, " ")}</span>
-                      <span className="ml-auto">{c.reasoning}</span>
+                      <span className="ml-auto">{getReasoningZh(c.type, c.reasoning)}</span>
                     </div>
                   ))}
                 </div>
@@ -323,51 +355,51 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
         <Card className="border-blue-500/20">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
-              CMP Vision Verification
+              {t("cmpVisionVerification")}
               {visionVerif.descriptionAccuracy && (
                 <span className={`text-xs font-normal ${accuracyColor(visionVerif.descriptionAccuracy)}`}>
                   {visionVerif.descriptionAccuracy.replace("_", " ")}
                 </span>
               )}
             </CardTitle>
-            {visionVerif.summary && (
-              <p className="text-xs text-muted-foreground">{visionVerif.summary}</p>
+            {visionSummaryText && (
+              <p className="text-xs text-muted-foreground">{visionSummaryText}</p>
             )}
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
-            {visionVerif.missedHazards && visionVerif.missedHazards.length > 0 && (
+            {missedHazardsArr.length > 0 && (
               <div>
-                <p className="text-xs uppercase tracking-wide text-yellow-500 mb-1">Missed by edge</p>
+                <p className="text-xs uppercase tracking-wide text-yellow-500 mb-1">{t("missedByEdge")}</p>
                 <ul className="list-disc pl-5 space-y-1 text-sm">
-                  {visionVerif.missedHazards.map((h, i) => <li key={i}>{h}</li>)}
+                  {missedHazardsArr.map((h, i) => <li key={i}>{h}</li>)}
                 </ul>
               </div>
             )}
-            {visionVerif.incorrectClaims && visionVerif.incorrectClaims.length > 0 && (
+            {incorrectClaimsArr.length > 0 && (
               <div>
-                <p className="text-xs uppercase tracking-wide text-red-400 mb-1">Incorrect claims from edge</p>
+                <p className="text-xs uppercase tracking-wide text-red-400 mb-1">{t("incorrectClaims")}</p>
                 <ul className="list-disc pl-5 space-y-1 text-sm">
-                  {visionVerif.incorrectClaims.map((c, i) => <li key={i}>{c}</li>)}
+                  {incorrectClaimsArr.map((c, i) => <li key={i}>{c}</li>)}
                 </ul>
               </div>
             )}
-            {visionVerif.visionClassifications && visionVerif.visionClassifications.filter((c) => c.detected).length > 0 && (
+            {visionVerif.visionClassifications?.filter((c) => c.detected).length ? (
               <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">Vision-detected</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">{t("visionDetected")}</p>
                 <div className="space-y-1">
                   {visionVerif.visionClassifications.filter((c) => c.detected).map((c, i) => (
                     <div key={i} className="flex items-start gap-2 text-xs">
                       <Badge variant={riskVariant(c.riskLevel)} className="shrink-0 text-xs">{c.riskLevel}</Badge>
                       <span className="font-mono">{c.type.replace(/_/g, " ")}</span>
-                      <span className="text-muted-foreground">({Math.round(c.confidence * 100)}%) — {c.reasoning}</span>
+                      <span className="text-muted-foreground">({Math.round(c.confidence * 100)}%) — {getReasoningZh(c.type, c.reasoning)}</span>
                     </div>
                   ))}
                 </div>
               </div>
-            )}
-            {!visionVerif.missedHazards?.length && !visionVerif.incorrectClaims?.length &&
+            ) : null}
+            {!missedHazardsArr.length && !incorrectClaimsArr.length &&
              !visionVerif.visionClassifications?.filter((c) => c.detected).length && (
-              <p className="text-muted-foreground text-xs">Vision model found no additional issues.</p>
+              <p className="text-muted-foreground text-xs">{t("noVision")}</p>
             )}
           </CardContent>
         </Card>
@@ -376,7 +408,7 @@ export default async function IncidentDetailPage({ params }: { params: { id: str
       {/* Notification History */}
       {incident.notificationLogs.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-sm">Notifications Sent</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-sm">{t("notificationsSent")}</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-2">
               {incident.notificationLogs.map((nl) => (
