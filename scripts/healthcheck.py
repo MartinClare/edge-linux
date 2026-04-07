@@ -135,7 +135,7 @@ def check_cmp_api() -> Check:
 
 
 def check_edge_cloud_api() -> Check:
-    return check_http("edge-cloud:api", "http://localhost:3001/health", expect_status=200)
+    return check_http("edge-cloud:api", "http://localhost:3001/api/health", expect_status=200)
 
 
 # ---------------------------------------------------------------------------
@@ -166,32 +166,42 @@ def _systemctl_restart(service: str) -> str:
     return f"systemctl restart {service} → FAILED ({r.stderr.strip()})"
 
 
-HEAL_ACTIONS: dict[str, callable] = {
-    # Systemd services (tries sudo; may not need a password if configured)
-    "systemd:edge-cloud-local": lambda: _systemctl_restart("edge-cloud-local"),
-    "systemd:edge-ui-local":    lambda: _systemctl_restart("edge-ui-local"),
+def _run_start_script(script: str) -> str:
+    """Run one of the start-*.sh helper scripts and return a status string."""
+    script_path = BASE / script
+    r = subprocess.run(
+        ["bash", str(script_path)],
+        capture_output=True, text=True,
+        cwd=str(BASE),
+    )
+    out = (r.stdout + r.stderr).strip()
+    if r.returncode == 0:
+        return f"bash {script} → OK ({out})"
+    return f"bash {script} → FAILED ({out})"
 
-    # Manually-started processes — start them directly as the current user
+
+HEAL_ACTIONS: dict[str, callable] = {
+    # Edge cloud — use the start script so logs go to logs/edge-cloud.log
+    "process:edge-cloud": lambda: _run_start_script("start-edge.sh"),
+
+    # CMP — use the start script so logs go to logs/cmp.log
+    "process:CMP": lambda: _run_start_script("start-cmp.sh"),
+
+    # go2rtc — start directly (managed by edge cloud background loop anyway)
     "process:go2rtc": lambda: _start_bg(
         ["/usr/local/bin/go2rtc", "-config", str(BASE / "go2rtc.yaml")],
         cwd=str(BASE),
-    ),
-    "process:CMP": lambda: _start_bg(
-        ["/usr/bin/node", "/home/iris/.nvm/versions/node/v22.14.0/bin/next",
-         "start", "-p", "3002"],
-        cwd=str(BASE / "CCTVCMP-linux"),
-        env_extra={"NODE_ENV": "production"},
     ),
 }
 
 # Port / API / stream checks heal by fixing the underlying process —
 # map them to the canonical process check name so we don't double-heal.
 CHECK_ALIAS: dict[str, str] = {
-    "port:3000 (PPE-UI)":    "systemd:edge-ui-local",
-    "port:3001 (edge-cloud)":"systemd:edge-cloud-local",
-    "port:3002 (CMP)":       "process:CMP",
-    "port:1984 (go2rtc)":    "process:go2rtc",
-    "CMP:api":               "process:CMP",
+    "port:3001 (edge-cloud)": "process:edge-cloud",
+    "edge-cloud:api":         "process:edge-cloud",
+    "port:3002 (CMP)":        "process:CMP",
+    "CMP:api":                "process:CMP",
+    "port:1984 (go2rtc)":     "process:go2rtc",
 }
 
 
@@ -252,8 +262,9 @@ def heal_failures(failures: list[Check]) -> tuple[list[HealResult], list[Check]]
             new_check = check_port(f.name, host_val, port_val)
         elif f.name.startswith("process:"):
             patterns = {
-                "process:go2rtc":    "go2rtc",
-                "process:CMP":       "next start -p 3002",
+                "process:edge-cloud": "node dist/index.js",
+                "process:go2rtc":     "go2rtc",
+                "process:CMP":        "next start -p 3002",
             }
             new_check = check_process(f.name, patterns.get(f.name, f.name))
         elif f.name == "CMP:api":
@@ -284,21 +295,19 @@ def heal_failures(failures: list[Check]) -> tuple[list[HealResult], list[Check]]
 def run_checks() -> list[Check]:
     results: list[Check] = []
 
-    # Systemd services
-    results.append(check_systemd("edge-cloud-local"))
-    results.append(check_systemd("edge-ui-local"))
-
     # Ports
     results.append(check_port("port:3000 (PPE-UI)",    "localhost", 3000))
     results.append(check_port("port:3001 (edge-cloud)", "localhost", 3001))
     results.append(check_port("port:3002 (CMP)",        "localhost", 3002))
     results.append(check_port("port:1984 (go2rtc)",     "localhost", 1984))
 
-    # Process checks (covers manually started services)
-    results.append(check_process("process:go2rtc",    "go2rtc"))
-    results.append(check_process("process:CMP",       "next start -p 3002"))
+    # Process checks
+    results.append(check_process("process:edge-cloud", "node dist/index.js"))
+    results.append(check_process("process:go2rtc",     "go2rtc"))
+    results.append(check_process("process:CMP",        "next start -p 3002"))
 
     # Application-level checks
+    results.append(check_edge_cloud_api())
     results.append(check_cmp_api())
     results += check_go2rtc_streams()
 

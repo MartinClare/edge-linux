@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -420,17 +420,43 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
   const [saving, setSaving] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Per-channel selected test image (channelId → File)
+  const [testImages, setTestImages] = useState<Record<string, File>>({});
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   async function sendTest(id: string) {
     setTestingId(id);
     try {
-      const res = await fetch(`/api/notification-channels/${id}/test`, { method: "POST" });
+      let res: Response;
+      const file = testImages[id];
+      if (file) {
+        const form = new FormData();
+        form.append("image", file);
+        res = await fetch(`/api/notification-channels/${id}/test`, { method: "POST", body: form });
+      } else {
+        res = await fetch(`/api/notification-channels/${id}/test`, { method: "POST" });
+      }
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) alert("Test notification sent successfully.");
+      if (res.ok && data.success) alert(data.message ?? "Test notification sent successfully.");
       else alert(data.message ?? "Test failed.");
     } finally {
       setTestingId(null);
     }
+  }
+
+  function pickImage(id: string) {
+    fileInputRefs.current[id]?.click();
+  }
+
+  function onFileChange(id: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) setTestImages((prev) => ({ ...prev, [id]: file }));
+    // reset so same file can be re-selected
+    e.target.value = "";
+  }
+
+  function clearImage(id: string) {
+    setTestImages((prev) => { const n = { ...prev }; delete n[id]; return n; });
   }
 
   async function createChannel() {
@@ -577,6 +603,37 @@ function NotificationChannelsTab({ channels }: { channels: Channel[] }) {
                 >
                   {expandedId === ch.id ? "Close" : "Edit"}
                 </Button>
+                {/* Hidden file input for this channel */}
+                <input
+                  ref={(el) => { fileInputRefs.current[ch.id] = el; }}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => onFileChange(ch.id, e)}
+                />
+                {/* Image picker button */}
+                <Button
+                  size="sm"
+                  variant={testImages[ch.id] ? "secondary" : "outline"}
+                  title={testImages[ch.id] ? `Image: ${testImages[ch.id].name} — click to change` : "Choose test image (optional — uses default if not set)"}
+                  onClick={() => pickImage(ch.id)}
+                  className="gap-1.5"
+                >
+                  🖼
+                  {testImages[ch.id]
+                    ? <span className="max-w-[80px] truncate text-xs">{testImages[ch.id].name}</span>
+                    : <span className="text-xs text-muted-foreground">Image</span>}
+                </Button>
+                {testImages[ch.id] && (
+                  <button
+                    type="button"
+                    onClick={() => clearImage(ch.id)}
+                    title="Remove selected image (use default)"
+                    className="text-muted-foreground hover:text-foreground text-sm leading-none"
+                  >
+                    ×
+                  </button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"

@@ -159,6 +159,16 @@ export async function evaluateAlarms(
         camera: { select: { name: true } },
         zone: { select: { name: true } },
         project: { select: { name: true } },
+        edgeReport: {
+          select: {
+            id: true,
+            overallDescription: true,
+            classificationJson: true,
+            visionVerificationJson: true,
+            eventImagePath: true,
+            eventImageMimeType: true,
+          },
+        },
       },
     });
 

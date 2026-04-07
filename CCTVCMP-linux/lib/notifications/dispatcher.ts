@@ -14,6 +14,14 @@ type IncidentWithRelations = Incident & {
   camera?: { name: string } | null;
   zone?: { name: string } | null;
   project?: { name: string } | null;
+  edgeReport?: {
+    id: string;
+    overallDescription: string | null;
+    classificationJson: unknown;
+    visionVerificationJson: unknown;
+    eventImagePath: string | null;
+    eventImageMimeType: string | null;
+  } | null;
 };
 
 /**

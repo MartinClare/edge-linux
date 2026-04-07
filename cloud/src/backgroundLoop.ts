@@ -169,21 +169,18 @@ async function analysisIteration(): Promise<void> {
     }
 
     const result = await analyzeImageBuffer(frameJpeg);
-    if (result) {
-      latestResults.set(camera.id, buildCachedResult(camera.id, camera.name, result));
+    latestResults.set(camera.id, buildCachedResult(camera.id, camera.name, result));
 
-      const central = getCentralConfig(cfg);
-      // Frame was just captured successfully → stream is healthy
-      const payload = buildAnalysisReportPayload(
-        camera.id,
-        camera.name,
-        result,
-        camera.url,
-        true,
-        true,
-      );
-      sendToCMP(central, payload, frameJpeg).catch(() => {});
-    }
+    const central = getCentralConfig(cfg);
+    const payload = buildAnalysisReportPayload(
+      camera.id,
+      camera.name,
+      result,
+      camera.url,
+      true,
+      true,
+    );
+    sendToCMP(central, payload, frameJpeg).catch(() => {});
 
     scheduleAnalysis(interval);
   } catch (err) {

@@ -12,7 +12,6 @@ import {
   OPENROUTER_API_KEY, 
   OPENROUTER_API_URL, 
   MODEL_NAME,
-  FALLBACK_MODEL_NAME,
   getSafetyAnalysisPrompt,
   type SupportedLanguage
 } from './openRouterClient.js';
@@ -200,21 +199,7 @@ router.post('/analyze-image', (req: Request, res: Response) => {
       // Get the language-specific prompt
       const analysisPrompt = getSafetyAnalysisPrompt(language);
 
-      // Attempt primary model; fall back automatically on region bans (403)
-      let responseText: string;
-      try {
-        responseText = await callOpenRouter(MODEL_NAME, imageDataUrl, analysisPrompt);
-      } catch (primaryErr: unknown) {
-        const status = (primaryErr as { status?: number }).status;
-        const msg = (primaryErr as Error).message || '';
-        const isBanned = status === 403 || msg.toLowerCase().includes('banned') || msg.toLowerCase().includes('not available in your region');
-        if (isBanned) {
-          console.warn(`Primary model (${MODEL_NAME}) is region-blocked. Retrying with fallback: ${FALLBACK_MODEL_NAME}`);
-          responseText = await callOpenRouter(FALLBACK_MODEL_NAME, imageDataUrl, analysisPrompt);
-        } else {
-          throw primaryErr;
-        }
-      }
+      const responseText = await callOpenRouter(MODEL_NAME, imageDataUrl, analysisPrompt);
 
       // Parse the response
       const analysisResult = parseGeminiResponse(responseText);

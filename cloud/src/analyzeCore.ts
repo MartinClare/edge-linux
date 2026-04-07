@@ -8,7 +8,6 @@ import {
   OPENROUTER_API_KEY,
   OPENROUTER_API_URL,
   MODEL_NAME,
-  FALLBACK_MODEL_NAME,
   getSafetyAnalysisPrompt,
   type SupportedLanguage,
 } from './openRouterClient.js';
@@ -95,39 +94,16 @@ async function callOpenRouter(
 
 /**
  * Analyse a JPEG buffer and return a structured SafetyAnalysisResult.
- * Automatically retries with the fallback model on region bans.
- *
- * Returns null on unrecoverable failure (logged internally).
+ * Throws on any failure — callers must handle errors explicitly.
  */
 export async function analyzeImageBuffer(
   jpegBuffer: Buffer,
   language: SupportedLanguage = 'en',
-): Promise<SafetyAnalysisResult | null> {
+): Promise<SafetyAnalysisResult> {
   const imageDataUrl = `data:image/jpeg;base64,${jpegBuffer.toString('base64')}`;
   const sizeKB = jpegBuffer.length / 1024;
   const prompt = getSafetyAnalysisPrompt(language);
 
-  try {
-    let responseText: string;
-    try {
-      responseText = await callOpenRouter(MODEL_NAME, imageDataUrl, prompt, sizeKB);
-    } catch (primaryErr: unknown) {
-      const status = (primaryErr as { status?: number }).status;
-      const msg = (primaryErr as Error).message || '';
-      const isBanned =
-        status === 403 ||
-        msg.toLowerCase().includes('banned') ||
-        msg.toLowerCase().includes('not available in your region');
-      if (isBanned) {
-        console.warn(`Primary model (${MODEL_NAME}) region-blocked; retrying with ${FALLBACK_MODEL_NAME}`);
-        responseText = await callOpenRouter(FALLBACK_MODEL_NAME, imageDataUrl, prompt, sizeKB);
-      } else {
-        throw primaryErr;
-      }
-    }
-    return parseGeminiResponse(responseText);
-  } catch (err) {
-    console.error('[analyzeCore] Analysis failed:', (err as Error).message);
-    return null;
-  }
+  const responseText = await callOpenRouter(MODEL_NAME, imageDataUrl, prompt, sizeKB);
+  return parseGeminiResponse(responseText);
 }

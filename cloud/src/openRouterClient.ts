@@ -33,11 +33,6 @@ export const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions
 export const MODEL_NAME = process.env.VISION_MODEL || 'qwen/qwen3-vl-32b-instruct';
 
 /**
- * Fallback model when the primary is unavailable.
- */
-export const FALLBACK_MODEL_NAME = process.env.FALLBACK_MODEL || 'qwen/qwen2.5-vl-72b-instruct';
-
-/**
  * Supported languages for analysis output
  */
 export type SupportedLanguage = 'en' | 'zh-TW';
