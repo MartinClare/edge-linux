@@ -159,7 +159,7 @@ def _start_bg(cmd: list[str], cwd: str, env_extra: dict | None = None) -> str:
 
 
 def _systemctl_restart(service: str) -> str:
-    r = subprocess.run(["sudo", "systemctl", "restart", service],
+    r = subprocess.run(["systemctl", "--user", "restart", service],
                        capture_output=True, text=True)
     if r.returncode == 0:
         return f"systemctl restart {service} → OK"
@@ -181,11 +181,11 @@ def _run_start_script(script: str) -> str:
 
 
 HEAL_ACTIONS: dict[str, callable] = {
-    # Edge cloud — use the start script so logs go to logs/edge-cloud.log
-    "process:edge-cloud": lambda: _run_start_script("start-edge.sh"),
+    # Edge cloud — managed by systemd user service
+    "process:edge-cloud": lambda: _systemctl_restart("edge-cloud.service"),
 
-    # CMP — use the start script so logs go to logs/cmp.log
-    "process:CMP": lambda: _run_start_script("start-cmp.sh"),
+    # CMP — managed by systemd user service
+    "process:CMP": lambda: _systemctl_restart("cmp.service"),
 
     # go2rtc — start directly (managed by edge cloud background loop anyway)
     "process:go2rtc": lambda: _start_bg(
