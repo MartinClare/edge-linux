@@ -144,16 +144,16 @@ export default function IncidentDetailScreen() {
 
       <View style={[styles.card, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
         <Text style={[styles.sectionTitle, { color: c.text }]}>{t('incidents.details')}</Text>
-        <Row label="{t('incidents.assignedTo')}" value={incident.assignee?.name ?? t('incidents.unassigned')} c={c} />
-        <Row label="{t('incidents.detectedAt')}" value={new Date(incident.detectedAt).toLocaleString()} c={c} />
+        <Row label={t('incidents.assignedTo')} value={incident.assignee?.name ?? t('incidents.unassigned')} c={c} />
+        <Row label={t('incidents.detectedAt')} value={new Date(incident.detectedAt).toLocaleString()} c={c} />
         {incident.acknowledgedAt ? (
-          <Row label="{t('incidents.acknowledgedAt')}" value={new Date(incident.acknowledgedAt).toLocaleString()} c={c} />
+          <Row label={t('incidents.acknowledgedAt')} value={new Date(incident.acknowledgedAt).toLocaleString()} c={c} />
         ) : null}
         {incident.resolvedAt ? (
-          <Row label="{t('incidents.resolvedAt')}" value={new Date(incident.resolvedAt).toLocaleString()} c={c} />
+          <Row label={t('incidents.resolvedAt')} value={new Date(incident.resolvedAt).toLocaleString()} c={c} />
         ) : null}
         {incident.dismissedAt ? (
-          <Row label="{t('incidents.dismissedAt')}" value={new Date(incident.dismissedAt).toLocaleString()} c={c} />
+          <Row label={t('incidents.dismissedAt')} value={new Date(incident.dismissedAt).toLocaleString()} c={c} />
         ) : null}
       </View>
 
@@ -232,7 +232,7 @@ export default function IncidentDetailScreen() {
           onPress={() => void patchStatus('acknowledged')}
           disabled={actionBusy !== null}
         >
-          <Text style={styles.btnText}>{actionBusy === 'acknowledged' ? '…' : '{t('incidents.acknowledge')}'}</Text>
+          <Text style={styles.btnText}>{actionBusy === 'acknowledged' ? '…' : t('incidents.acknowledge')}</Text>
         </Pressable>
       ) : null}
       {incident.status === 'open' || incident.status === 'acknowledged' ? (
@@ -242,7 +242,7 @@ export default function IncidentDetailScreen() {
             onPress={() => void patchStatus('resolved')}
             disabled={actionBusy !== null}
           >
-            <Text style={styles.btnText}>{actionBusy === 'resolved' ? '…' : '{t('incidents.resolve')}'}</Text>
+            <Text style={styles.btnText}>{actionBusy === 'resolved' ? '…' : t('incidents.resolve')}</Text>
           </Pressable>
           <Pressable
             style={[styles.btnOutline, { borderColor: c.border }]}
@@ -250,7 +250,7 @@ export default function IncidentDetailScreen() {
             disabled={actionBusy !== null}
           >
             <Text style={[styles.btnOutlineText, { color: c.textSub }]}>
-              {actionBusy === 'dismissed' ? '…' : '{t('incidents.dismiss')}'}
+              {actionBusy === 'dismissed' ? '…' : t('incidents.dismiss')}
             </Text>
           </Pressable>
         </>

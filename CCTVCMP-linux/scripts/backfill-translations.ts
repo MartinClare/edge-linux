@@ -6,7 +6,7 @@
  *   npx tsx scripts/backfill-translations.ts
  */
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { translateReportToZh } from "../lib/translator";
 
 const prisma = new PrismaClient();
@@ -31,8 +31,8 @@ async function main() {
   // but don't yet have translations
   const reports = await prisma.edgeReport.findMany({
     where: {
-      translationsJson: { equals: null },
-      NOT: { classificationJson: { equals: null } },
+      translationsJson: { equals: Prisma.DbNull },
+      NOT: { classificationJson: { equals: Prisma.DbNull } },
     },
     select: {
       id: true,

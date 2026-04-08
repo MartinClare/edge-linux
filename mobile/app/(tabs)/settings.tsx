@@ -95,7 +95,7 @@ export default function SettingsScreen() {
 
   async function onRegisterPush() {
     if (isAndroidExpoGo) {
-      setMessage('{t('settings.pushNotifications')} are not supported in Expo Go on Android. Build a standalone APK to enable them.');
+      setMessage(`${t('settings.pushNotifications')} are not supported in Expo Go on Android. Build a standalone APK to enable them.`);
       return;
     }
     setPushBusy(true);
@@ -206,7 +206,7 @@ export default function SettingsScreen() {
 
       <Text style={[styles.section, { color: c.text }]}>{t('settings.projectFilter')}</Text>
       <Text style={[styles.hint, { color: c.textMuted }]}>
-        {isAdmin ? '{t('settings.leaveNone')}' : '{t('settings.projectsYouReceive')}'}
+        {isAdmin ? t('settings.leaveNone') : t('settings.projectsYouReceive')}
       </Text>
       {displayProjects.length === 0 && !isAdmin && selectedProjects.size === 0 ? (
         <Text style={[styles.hint, { color: c.textMuted }]}>{t('settings.allProjects')}</Text>
@@ -228,10 +228,10 @@ export default function SettingsScreen() {
 
       <Text style={[styles.section, { color: c.text }]}>{t('settings.pushNotifications')}</Text>
       <Pressable style={styles.button} onPress={() => void onRegisterPush()} disabled={pushBusy}>
-        <Text style={styles.buttonText}>{pushBusy ? '…' : '{t('settings.registerPush')}'}</Text>
+        <Text style={styles.buttonText}>{pushBusy ? '…' : t('settings.registerPush')}</Text>
       </Pressable>
       <Pressable style={[styles.buttonSecondary, { borderColor: '#2563eb' }]} onPress={() => void onTestPush()} disabled={testBusy}>
-        <Text style={styles.buttonSecondaryText}>{testBusy ? '…' : '{t('settings.sendTest')}'}</Text>
+        <Text style={styles.buttonSecondaryText}>{testBusy ? '…' : t('settings.sendTest')}</Text>
       </Pressable>
 
       {message ? <Text style={[styles.message, { color: c.text }]}>{message}</Text> : null}
