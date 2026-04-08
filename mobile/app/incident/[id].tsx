@@ -12,6 +12,7 @@ import { apiFetch } from '@/lib/api';
 import { useTheme } from '@/lib/theme';
 import { resolveCmpAssetUrl } from '@/constants/Config';
 import { useAuth } from '@/context/AuthContext';
+import { useLocale } from '@/context/LocaleContext';
 import { AuthImage } from '@/components/AuthImage';
 
 type IncidentDetail = {
@@ -81,6 +82,7 @@ function Row({
 export default function IncidentDetailScreen() {
   const c = useTheme();
   const { token } = useAuth();
+  const { t } = useLocale();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [incident, setIncident] = useState<IncidentDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -126,12 +128,12 @@ export default function IncidentDetailScreen() {
       <View style={styles.headerTop}>
         <Text style={[styles.title, { color: c.text }]}>{incident.type.replace(/_/g, ' ')}</Text>
         <View style={styles.badges}>
-          <Text style={[styles.badge, riskStyle(incident.riskLevel, c)]}>{incident.riskLevel}</Text>
+          <Text style={[styles.badge, riskStyle(incident.riskLevel, c)]}>{t(`common.risk.${incident.riskLevel}`)}</Text>
           <Text style={[styles.badge, { backgroundColor: c.surface, color: c.textSub }]}>
-            {incident.status.replace(/_/g, ' ')}
+            {t(`common.status.${incident.status}`)}
           </Text>
           {incident.recordOnly ? (
-            <Text style={[styles.badge, { backgroundColor: c.surface, color: c.textSub }]}>record</Text>
+            <Text style={[styles.badge, { backgroundColor: c.surface, color: c.textSub }]}>{t('incidents.record')}</Text>
           ) : null}
         </View>
       </View>
@@ -141,23 +143,23 @@ export default function IncidentDetailScreen() {
       <Text style={[styles.date, { color: c.textMuted }]}>{new Date(incident.detectedAt).toLocaleString()}</Text>
 
       <View style={[styles.card, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
-        <Text style={[styles.sectionTitle, { color: c.text }]}>Details</Text>
-        <Row label="Assigned to" value={incident.assignee?.name ?? 'Unassigned'} c={c} />
-        <Row label="Detected at" value={new Date(incident.detectedAt).toLocaleString()} c={c} />
+        <Text style={[styles.sectionTitle, { color: c.text }]}>{t('incidents.details')}</Text>
+        <Row label="{t('incidents.assignedTo')}" value={incident.assignee?.name ?? t('incidents.unassigned')} c={c} />
+        <Row label="{t('incidents.detectedAt')}" value={new Date(incident.detectedAt).toLocaleString()} c={c} />
         {incident.acknowledgedAt ? (
-          <Row label="Acknowledged at" value={new Date(incident.acknowledgedAt).toLocaleString()} c={c} />
+          <Row label="{t('incidents.acknowledgedAt')}" value={new Date(incident.acknowledgedAt).toLocaleString()} c={c} />
         ) : null}
         {incident.resolvedAt ? (
-          <Row label="Resolved at" value={new Date(incident.resolvedAt).toLocaleString()} c={c} />
+          <Row label="{t('incidents.resolvedAt')}" value={new Date(incident.resolvedAt).toLocaleString()} c={c} />
         ) : null}
         {incident.dismissedAt ? (
-          <Row label="Dismissed at" value={new Date(incident.dismissedAt).toLocaleString()} c={c} />
+          <Row label="{t('incidents.dismissedAt')}" value={new Date(incident.dismissedAt).toLocaleString()} c={c} />
         ) : null}
       </View>
 
       {imageUri ? (
         <View style={[styles.card, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
-          <Text style={[styles.sectionTitle, { color: c.text }]}>Evidence</Text>
+          <Text style={[styles.sectionTitle, { color: c.text }]}>{t('incidents.evidence')}</Text>
           <AuthImage
             uri={imageUri}
             token={token}
@@ -166,11 +168,11 @@ export default function IncidentDetailScreen() {
           />
           {incident.edgeReport?.receivedAt ? (
             <Text style={[styles.noteText, { color: c.textMuted }]}>
-              Captured {new Date(incident.edgeReport.receivedAt).toLocaleString()}
+              {t('incidents.captured', { value: new Date(incident.edgeReport.receivedAt).toLocaleString() })}
             </Text>
           ) : null}
           {incident.edgeReport?.overallRiskLevel ? (
-            <Text style={[styles.noteText, { color: c.textMuted }]}>Edge risk: {incident.edgeReport.overallRiskLevel}</Text>
+            <Text style={[styles.noteText, { color: c.textMuted }]}>{t('incidents.edgeRisk', { value: incident.edgeReport.overallRiskLevel })}</Text>
           ) : null}
           {incident.edgeReport?.peopleCount != null ? (
             <Text style={[styles.noteText, { color: c.textMuted }]}>
@@ -183,28 +185,28 @@ export default function IncidentDetailScreen() {
 
       {incident.reasoning ? (
         <View style={[styles.card, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
-          <Text style={[styles.sectionTitle, { color: c.text }]}>Reasoning</Text>
+          <Text style={[styles.sectionTitle, { color: c.text }]}>{t('incidents.reasoning')}</Text>
           <Text style={[styles.body, { color: c.textSub }]}>{incident.reasoning}</Text>
         </View>
       ) : null}
 
       {incident.edgeReport?.overallDescription ? (
         <View style={[styles.card, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
-          <Text style={[styles.sectionTitle, { color: c.text }]}>Edge summary</Text>
+          <Text style={[styles.sectionTitle, { color: c.text }]}>{t('incidents.edgeSummary')}</Text>
           <Text style={[styles.body, { color: c.textSub }]}>{incident.edgeReport.overallDescription}</Text>
         </View>
       ) : null}
 
       {incident.notes ? (
         <View style={[styles.card, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
-          <Text style={[styles.sectionTitle, { color: c.text }]}>Notes</Text>
+          <Text style={[styles.sectionTitle, { color: c.text }]}>{t('incidents.notesTitle')}</Text>
           <Text style={[styles.body, { color: c.textSub }]}>{incident.notes}</Text>
         </View>
       ) : null}
 
       {incident.notificationLogs.length > 0 ? (
         <View style={[styles.card, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
-          <Text style={[styles.sectionTitle, { color: c.text }]}>Notifications</Text>
+          <Text style={[styles.sectionTitle, { color: c.text }]}>{t('incidents.notifications')}</Text>
           {incident.notificationLogs.map((log) => (
             <View key={log.id} style={[styles.detailRow, { borderBottomColor: c.border }]}>
               <View style={{ flex: 1 }}>
@@ -223,14 +225,14 @@ export default function IncidentDetailScreen() {
         </View>
       ) : null}
 
-      <Text style={[styles.section, { color: c.text }]}>Actions</Text>
+      <Text style={[styles.section, { color: c.text }]}>{t('incidents.actions')}</Text>
       {incident.status === 'open' ? (
         <Pressable
           style={styles.btn}
           onPress={() => void patchStatus('acknowledged')}
           disabled={actionBusy !== null}
         >
-          <Text style={styles.btnText}>{actionBusy === 'acknowledged' ? '…' : 'Acknowledge'}</Text>
+          <Text style={styles.btnText}>{actionBusy === 'acknowledged' ? '…' : '{t('incidents.acknowledge')}'}</Text>
         </Pressable>
       ) : null}
       {incident.status === 'open' || incident.status === 'acknowledged' ? (
@@ -240,7 +242,7 @@ export default function IncidentDetailScreen() {
             onPress={() => void patchStatus('resolved')}
             disabled={actionBusy !== null}
           >
-            <Text style={styles.btnText}>{actionBusy === 'resolved' ? '…' : 'Resolve'}</Text>
+            <Text style={styles.btnText}>{actionBusy === 'resolved' ? '…' : '{t('incidents.resolve')}'}</Text>
           </Pressable>
           <Pressable
             style={[styles.btnOutline, { borderColor: c.border }]}
@@ -248,7 +250,7 @@ export default function IncidentDetailScreen() {
             disabled={actionBusy !== null}
           >
             <Text style={[styles.btnOutlineText, { color: c.textSub }]}>
-              {actionBusy === 'dismissed' ? '…' : 'Dismiss'}
+              {actionBusy === 'dismissed' ? '…' : '{t('incidents.dismiss')}'}
             </Text>
           </Pressable>
         </>

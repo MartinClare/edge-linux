@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 import { Redirect, useRouter } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
+import { useLocale } from '@/context/LocaleContext';
 
 export default function LoginScreen() {
   const { login, ready, user } = useAuth();
+  const { t } = useLocale();
   const router = useRouter();
   const scheme = useColorScheme();
   const dark = scheme === 'dark';
@@ -43,11 +45,11 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={[styles.container, { backgroundColor: c.bg }]}
     >
-      <Text style={[styles.title, { color: c.text }]}>CMP Mobile</Text>
-      <Text style={[styles.sub, { color: c.muted }]}>Sign in with your CMP account</Text>
+      <Text style={[styles.title, { color: c.text }]}>{t('login.title')}</Text>
+      <Text style={[styles.sub, { color: c.muted }]}>{t('login.subtitle')}</Text>
       <TextInput
         style={[styles.input, { borderColor: c.border, backgroundColor: c.inputBg, color: c.text }]}
-        placeholder="Email"
+        placeholder={t('login.email')}
         placeholderTextColor={c.placeholder}
         autoCapitalize="none"
         keyboardType="email-address"
@@ -58,7 +60,7 @@ export default function LoginScreen() {
       />
       <TextInput
         style={[styles.input, { borderColor: c.border, backgroundColor: c.inputBg, color: c.text }]}
-        placeholder="Password"
+        placeholder={t('login.password')}
         placeholderTextColor={c.placeholder}
         secureTextEntry
         value={password}
@@ -74,7 +76,7 @@ export default function LoginScreen() {
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.buttonText}>Sign in</Text>
+          <Text style={styles.buttonText}>{t('login.action')}</Text>
         )}
       </Pressable>
     </KeyboardAvoidingView>

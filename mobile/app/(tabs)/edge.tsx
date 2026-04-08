@@ -10,6 +10,7 @@ import {
 import { useFocusEffect } from 'expo-router';
 import { apiFetch } from '@/lib/api';
 import { useTheme } from '@/lib/theme';
+import { useLocale } from '@/context/LocaleContext';
 
 type Device = {
   id: string;
@@ -23,6 +24,7 @@ type Device = {
 
 export default function EdgeDevicesScreen() {
   const c = useTheme();
+  const { t } = useLocale();
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -64,7 +66,7 @@ export default function EdgeDevicesScreen() {
         />
       }
       contentContainerStyle={styles.list}
-      ListEmptyComponent={<Text style={[styles.empty, { color: c.textMuted }]}>No edge devices</Text>}
+      ListEmptyComponent={<Text style={[styles.empty, { color: c.textMuted }]}>{t('edge.empty')}</Text>}
       renderItem={({ item }) => (
         <View style={[styles.row, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}>
           <View style={styles.rowTop}>
@@ -77,16 +79,16 @@ export default function EdgeDevicesScreen() {
                   : { backgroundColor: c.offlineBg, color: c.offlineText },
               ]}
             >
-              {item.isOnline ? 'Online' : 'Offline'}
+              {item.isOnline ? t('edge.online') : t('edge.offline')}
             </Text>
           </View>
           <Text style={[styles.meta, { color: c.textSub }]}>{item.project?.name ?? '—'}</Text>
           {item.latestRiskLevel ? (
-            <Text style={[styles.meta, { color: c.textSub }]}>Latest risk: {item.latestRiskLevel}</Text>
+            <Text style={[styles.meta, { color: c.textSub }]}>{t('edge.latestRisk', { value: item.latestRiskLevel })}</Text>
           ) : null}
           {item.lastReportAt ? (
             <Text style={[styles.date, { color: c.textMuted }]}>
-              Last report: {new Date(item.lastReportAt).toLocaleString()}
+              {t('edge.lastReport', { value: new Date(item.lastReportAt).toLocaleString() })}
             </Text>
           ) : null}
         </View>

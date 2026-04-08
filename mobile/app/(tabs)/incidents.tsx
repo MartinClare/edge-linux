@@ -13,6 +13,7 @@ import { apiFetch } from '@/lib/api';
 import { useTheme } from '@/lib/theme';
 import { resolveCmpAssetUrl } from '@/constants/Config';
 import { useAuth } from '@/context/AuthContext';
+import { useLocale } from '@/context/LocaleContext';
 import { AuthImage } from '@/components/AuthImage';
 
 type IncidentRow = {
@@ -56,6 +57,7 @@ function riskStyle(level: string, c: ReturnType<typeof useTheme>) {
 export default function IncidentsScreen() {
   const c = useTheme();
   const { token } = useAuth();
+  const { t } = useLocale();
   const router = useRouter();
   const [items, setItems] = useState<IncidentRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,7 +100,7 @@ export default function IncidentsScreen() {
         />
       }
       contentContainerStyle={styles.list}
-      ListEmptyComponent={<Text style={[styles.empty, { color: c.textMuted }]}>No incidents</Text>}
+      ListEmptyComponent={<Text style={[styles.empty, { color: c.textMuted }]}>{t('incidents.empty')}</Text>}
       renderItem={({ item }) => (
         <Pressable
           style={[styles.row, { backgroundColor: c.surfaceAlt, borderColor: c.border }]}
@@ -117,19 +119,19 @@ export default function IncidentsScreen() {
               <View style={styles.rowTop}>
                 <Text style={[styles.type, { color: c.text }]}>{item.type.replace(/_/g, ' ')}</Text>
                 <View style={styles.badges}>
-                  <Text style={[styles.badge, riskStyle(item.riskLevel, c)]}>{item.riskLevel}</Text>
+                  <Text style={[styles.badge, riskStyle(item.riskLevel, c)]}>{t(`common.risk.${item.riskLevel}`)}</Text>
                   <Text style={[styles.badge, { backgroundColor: c.surface, color: c.textSub }]}>
-                    {item.status.replace(/_/g, ' ')}
+                    {t(`common.status.${item.status}`)}
                   </Text>
                   {item.recordOnly ? (
-                    <Text style={[styles.badge, { backgroundColor: c.surface, color: c.textSub }]}>record</Text>
+                    <Text style={[styles.badge, { backgroundColor: c.surface, color: c.textSub }]}>{t('incidents.record')}</Text>
                   ) : null}
                 </View>
               </View>
               <Text style={[styles.meta, { color: c.textSub }]}>
                 {item.project.name} · {item.zone.name} · {item.camera.name}
               </Text>
-              <Text style={[styles.meta, { color: c.textSub }]}>Assigned: {item.assignee?.name ?? 'Unassigned'}</Text>
+              <Text style={[styles.meta, { color: c.textSub }]}>{t('incidents.assigned', { value: item.assignee?.name ?? t('incidents.unassigned') })}</Text>
               {item.reasoning ? (
                 <Text numberOfLines={2} style={[styles.body, { color: c.textSub }]}>
                   {item.reasoning}
@@ -137,12 +139,12 @@ export default function IncidentsScreen() {
               ) : null}
               {item.notes ? (
                 <Text numberOfLines={2} style={[styles.note, { color: c.textMuted }]}>
-                  Notes: {item.notes}
+                  {t('incidents.notes', { value: item.notes })}
                 </Text>
               ) : null}
               {item.edgeReport?.overallDescription ? (
                 <Text numberOfLines={2} style={[styles.note, { color: c.textMuted }]}>
-                  Edge: {item.edgeReport.overallDescription}
+                  {t('incidents.edge', { value: item.edgeReport.overallDescription })}
                 </Text>
               ) : null}
               <Text style={[styles.date, { color: c.textMuted }]}>{new Date(item.detectedAt).toLocaleString()}</Text>

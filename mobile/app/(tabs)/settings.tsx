@@ -13,6 +13,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { useLocale } from '@/context/LocaleContext';
 import { registerPushTokenWithCmp } from '@/lib/push';
 import { useTheme } from '@/lib/theme';
 
@@ -33,6 +34,7 @@ const ADMIN_ROLE = 'admin';
 
 export default function SettingsScreen() {
   const { logout, user } = useAuth();
+  const { locale, setLocale, t } = useLocale();
   const router = useRouter();
   const c = useTheme();
   const isAdmin = user?.role === ADMIN_ROLE;
@@ -87,20 +89,20 @@ export default function SettingsScreen() {
     setSaving(false);
     if (res.ok) {
       applyPreferencePayload(res.data);
-      setMessage('Saved');
+      setMessage(t('settings.saved'));
     } else setMessage(res.error.message);
   }
 
   async function onRegisterPush() {
     if (isAndroidExpoGo) {
-      setMessage('Push notifications are not supported in Expo Go on Android. Build a standalone APK to enable them.');
+      setMessage('{t('settings.pushNotifications')} are not supported in Expo Go on Android. Build a standalone APK to enable them.');
       return;
     }
     setPushBusy(true);
     setMessage(null);
     const token = await registerPushTokenWithCmp();
     setPushBusy(false);
-    setMessage(token ? 'Push token registered' : 'Push permission denied or unavailable');
+    setMessage(token ? t('settings.pushRegistered') : t('settings.pushDenied'));
   }
 
   async function onTestPush() {
@@ -111,7 +113,7 @@ export default function SettingsScreen() {
       body: '{}',
     });
     setTestBusy(false);
-    if (res.ok) setMessage(`Test sent (${(res.data as { sent?: number }).sent ?? 0} device(s))`);
+    if (res.ok) setMessage(t('settings.testSent', { count: (res.data as { sent?: number }).sent ?? 0 }));
     else setMessage(res.error.message);
   }
 
@@ -137,19 +139,34 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={styles.container}>
-      <Text style={[styles.section, { color: c.text }]}>Signed in</Text>
+      <Text style={[styles.section, { color: c.text }]}>{t('settings.signedIn')}</Text>
       <Text style={[styles.email, { color: c.text }]}>{user?.email}</Text>
       <Text style={[styles.role, { color: c.textMuted }]}>{user?.role}</Text>
 
+      <Text style={[styles.section, { color: c.text }]}>{t('settings.language')}</Text>
+      <View style={styles.languageRow}>
+        <Pressable
+          style={[styles.languageButton, locale === 'en' && styles.languageButtonActive]}
+          onPress={() => void setLocale('en')}
+        >
+          <Text style={[styles.languageButtonText, locale === 'en' && styles.languageButtonTextActive]}>{t('settings.english')}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.languageButton, locale === 'zh-Hant' && styles.languageButtonActive]}
+          onPress={() => void setLocale('zh-Hant')}
+        >
+          <Text style={[styles.languageButtonText, locale === 'zh-Hant' && styles.languageButtonTextActive]}>{t('settings.traditionalChinese')}</Text>
+        </Pressable>
+      </View>
+
       {alertParamsReadOnly ? (
         <Text style={[styles.readOnlyBanner, { color: c.textSub, backgroundColor: c.surface }]}>
-          Alert thresholds and project scope are set by a CMP administrator. You can still register this device for
-          push below.
+          {t('settings.adminNote')}
         </Text>
       ) : null}
 
-      <Text style={[styles.section, { color: c.text }]}>Alert threshold</Text>
-      <Text style={[styles.hint, { color: c.textMuted }]}>Notify when incident risk is at or above:</Text>
+      <Text style={[styles.section, { color: c.text }]}>{t('settings.alertThreshold')}</Text>
+      <Text style={[styles.hint, { color: c.textMuted }]}>{t('settings.notifyAbove')}</Text>
       <View style={styles.riskRow}>
         {RISKS.map((r) => (
           <Pressable
@@ -170,7 +187,7 @@ export default function SettingsScreen() {
       </View>
 
       <View style={[styles.rowBetween, { borderBottomColor: c.border }]}>
-        <Text style={{ color: c.text }}>Alerts enabled</Text>
+        <Text style={{ color: c.text }}>{t('settings.alertsEnabled')}</Text>
         <Switch
           value={pref.alertsEnabled}
           onValueChange={(v) => void savePatch({ alertsEnabled: v })}
@@ -179,7 +196,7 @@ export default function SettingsScreen() {
       </View>
 
       <View style={[styles.rowBetween, { borderBottomColor: c.border }]}>
-        <Text style={{ color: c.text }}>Critical incident types only</Text>
+        <Text style={{ color: c.text }}>{t('settings.criticalOnly')}</Text>
         <Switch
           value={pref.criticalTypesOnly}
           onValueChange={(v) => void savePatch({ criticalTypesOnly: v })}
@@ -187,12 +204,12 @@ export default function SettingsScreen() {
         />
       </View>
 
-      <Text style={[styles.section, { color: c.text }]}>Project filter</Text>
+      <Text style={[styles.section, { color: c.text }]}>{t('settings.projectFilter')}</Text>
       <Text style={[styles.hint, { color: c.textMuted }]}>
-        {isAdmin ? 'Leave none selected for all projects.' : 'Projects you receive alerts for:'}
+        {isAdmin ? '{t('settings.leaveNone')}' : '{t('settings.projectsYouReceive')}'}
       </Text>
       {displayProjects.length === 0 && !isAdmin && selectedProjects.size === 0 ? (
-        <Text style={[styles.hint, { color: c.textMuted }]}>All projects (no restriction)</Text>
+        <Text style={[styles.hint, { color: c.textMuted }]}>{t('settings.allProjects')}</Text>
       ) : null}
       {displayProjects.map((p) => (
         <Pressable
@@ -206,15 +223,15 @@ export default function SettingsScreen() {
         </Pressable>
       ))}
       {isAdmin && displayProjects.length === 0 ? (
-        <Text style={[styles.hint, { color: c.textMuted }]}>Loading projects…</Text>
+        <Text style={[styles.hint, { color: c.textMuted }]}>{t('settings.loadingProjects')}</Text>
       ) : null}
 
-      <Text style={[styles.section, { color: c.text }]}>Push notifications</Text>
+      <Text style={[styles.section, { color: c.text }]}>{t('settings.pushNotifications')}</Text>
       <Pressable style={styles.button} onPress={() => void onRegisterPush()} disabled={pushBusy}>
-        <Text style={styles.buttonText}>{pushBusy ? '…' : 'Register this device for push'}</Text>
+        <Text style={styles.buttonText}>{pushBusy ? '…' : '{t('settings.registerPush')}'}</Text>
       </Pressable>
       <Pressable style={[styles.buttonSecondary, { borderColor: '#2563eb' }]} onPress={() => void onTestPush()} disabled={testBusy}>
-        <Text style={styles.buttonSecondaryText}>{testBusy ? '…' : 'Send test notification'}</Text>
+        <Text style={styles.buttonSecondaryText}>{testBusy ? '…' : '{t('settings.sendTest')}'}</Text>
       </Pressable>
 
       {message ? <Text style={[styles.message, { color: c.text }]}>{message}</Text> : null}
@@ -226,7 +243,7 @@ export default function SettingsScreen() {
           router.replace('/login');
         }}
       >
-        <Text style={styles.logoutText}>Sign out</Text>
+        <Text style={styles.logoutText}>{t('settings.signOut')}</Text>
       </Pressable>
     </ScrollView>
   );
@@ -286,4 +303,9 @@ const styles = StyleSheet.create({
   message: { marginTop: 12, fontSize: 14, color: '#16a34a' },
   logout: { marginTop: 32, padding: 14, alignItems: 'center' },
   logoutText: { color: '#dc2626', fontWeight: '600', fontSize: 16 },
+  languageRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  languageButton: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: '#e4e4e7' },
+  languageButtonActive: { backgroundColor: '#2563eb' },
+  languageButtonText: { color: '#18181b', fontWeight: '500' },
+  languageButtonTextActive: { color: '#fff' },
 });

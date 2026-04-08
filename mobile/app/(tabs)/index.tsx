@@ -3,6 +3,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View }
 import { useFocusEffect } from 'expo-router';
 import { apiFetch } from '@/lib/api';
 import { useTheme } from '@/lib/theme';
+import { useLocale } from '@/context/LocaleContext';
 
 type Summary = {
   openIncidents: number;
@@ -13,6 +14,7 @@ type Summary = {
 
 export default function SummaryScreen() {
   const c = useTheme();
+  const { t } = useLocale();
   const [data, setData] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -50,17 +52,17 @@ export default function SummaryScreen() {
       contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <Text style={[styles.h1, { color: c.text }]}>Overview</Text>
+      <Text style={[styles.h1, { color: c.text }]}>{t('summary.title')}</Text>
       <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-        <Text style={[styles.label, { color: c.textSub }]}>Open incidents</Text>
+        <Text style={[styles.label, { color: c.textSub }]}>{t('summary.openIncidents')}</Text>
         <Text style={[styles.value, { color: c.text }]}>{data?.openIncidents ?? '—'}</Text>
       </View>
       <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-        <Text style={[styles.label, { color: c.textSub }]}>Open high / critical</Text>
+        <Text style={[styles.label, { color: c.textSub }]}>{t('summary.openHighCritical')}</Text>
         <Text style={[styles.value, { color: c.text }]}>{data?.highCriticalIncidents ?? '—'}</Text>
       </View>
       <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }]}>
-        <Text style={[styles.label, { color: c.textSub }]}>Edge devices online</Text>
+        <Text style={[styles.label, { color: c.textSub }]}>{t('summary.edgeDevicesOnline')}</Text>
         <Text style={[styles.value, { color: c.text }]}>
           {data != null ? `${data.edgeDevicesOnline} / ${data.edgeDevicesTotal}` : '—'}
         </Text>
