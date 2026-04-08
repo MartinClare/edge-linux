@@ -69,7 +69,11 @@ export async function getCurrentUserFromCookies() {
 }
 
 export async function getCurrentUserFromRequest(request: NextRequest) {
-  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const cookieToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const authHeader = request.headers.get("authorization");
+  const bearerToken =
+    authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : null;
+  const token = cookieToken || bearerToken;
   if (!token) return null;
   try {
     const payload = await verifyToken(token);

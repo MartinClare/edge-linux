@@ -21,15 +21,19 @@ export async function middleware(request: NextRequest) {
   }
 
   const required = getRequiredRoles(pathname);
-  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const cookieToken = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const authHeader = request.headers.get("authorization");
+  const bearerToken = authHeader && authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : null;
+  const token = cookieToken || bearerToken;
 
-  if (!required && authRoutes.includes(pathname) && token) {
+  if (!required && authRoutes.includes(pathname) && cookieToken) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   if (!required) return NextResponse.next();
 
   if (!token) {
+    if (pathname.startsWith("/api")) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     return NextResponse.redirect(new URL("/signin", request.url));
   }
 

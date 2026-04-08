@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +36,7 @@ const CRITICAL_ALERT_TYPES = ["ppe_violation", "smoking", "fire_detected", "mach
 
 export function SettingsTabs({ rules, channels }: { rules: AlarmRule[]; channels: Channel[] }) {
   const t = useTranslations("settings");
-  const [tab, setTab] = useState<"critical" | "rules" | "channels" | "edge">("critical");
+  const [tab, setTab] = useState<"critical" | "rules" | "channels" | "mobile" | "edge">("critical");
 
   return (
     <div className="space-y-4">
@@ -50,6 +50,9 @@ export function SettingsTabs({ rules, channels }: { rules: AlarmRule[]; channels
         <Button variant={tab === "channels" ? "default" : "outline"} onClick={() => setTab("channels")}>
           {t("tabChannels")}
         </Button>
+        <Button variant={tab === "mobile" ? "default" : "outline"} onClick={() => setTab("mobile")}>
+          Mobile
+        </Button>
         <Button variant={tab === "edge" ? "default" : "outline"} onClick={() => setTab("edge")}>
           {t("tabEdge")}
         </Button>
@@ -61,6 +64,8 @@ export function SettingsTabs({ rules, channels }: { rules: AlarmRule[]; channels
         <AlarmRulesTab rules={rules} t={t} />
       ) : tab === "channels" ? (
         <NotificationChannelsTab channels={channels} t={t} />
+      ) : tab === "mobile" ? (
+        <MobileSettingsTab />
       ) : (
         <EdgeIntegrationHelp />
       )}
@@ -646,6 +651,78 @@ function NotificationChannelsTab({ channels, t }: { channels: Channel[]; t: TFn 
             {expandedId === ch.id && <ChannelConfigEditor channel={ch} t={t} />}
           </div>
         ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+
+function MobileSettingsTab() {
+  const [value, setValue] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/settings/mobile-config");
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && typeof data.mobilePublicBaseUrl === "string") {
+          setValue(data.mobilePublicBaseUrl);
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/settings/mobile-config", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mobilePublicBaseUrl: value.trim() || null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setMessage(typeof data?.message === "string" ? data.message : "Save failed");
+        return;
+      }
+      setValue(typeof data.mobilePublicBaseUrl === "string" ? data.mobilePublicBaseUrl : "");
+      setMessage("Saved");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Mobile deployment</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Set the public CMP base URL used in mobile incident image links. Example: https://cmp.example.com
+        </p>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Public CMP base URL</label>
+          <Input
+            placeholder="https://cmp.example.com"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            disabled={loading || saving}
+          />
+          <p className="text-xs text-muted-foreground">
+            Leave empty in local development to use the current request origin automatically.
+          </p>
+        </div>
+        <Button onClick={save} disabled={loading || saving}>
+          {saving ? "Saving..." : "Save"}
+        </Button>
+        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
       </CardContent>
     </Card>
   );
