@@ -1,0 +1,171 @@
+{
+  "image": "/home/interlv/Documents/avision/python/tmp/construction-site-crane.jpg",
+  "results": [
+    {
+      "ui_model": "local_qwen2_5_vl_7b",
+      "model_id": "qwen2-5-vl-7b",
+      "label": "Qwen2.5-VL-7B",
+      "load_probe_seconds": 104.74112226099533,
+      "warm_probe_seconds": 0.31818390199623536,
+      "estimated_load_seconds": 104.42293835899909,
+      "edge_warm_seconds": 45.35159985999053,
+      "load_ok": true,
+      "warm_probe_ok": true,
+      "edge_ok": true,
+      "summary": {
+        "risk": "Medium",
+        "peopleCount": 3,
+        "missingHardhats": 0,
+        "missingVests": 0,
+        "detections": [],
+        "shouldReport": false,
+        "description": "A large yellow mobile crane is parked on a construction site. There are a few workers standing nearby, but their PPE is not clearly visible."
+      },
+      "edge_error": null
+    },
+    {
+      "ui_model": "local_qwen3_vl_8b",
+      "model_id": "qwen3-vl-8b",
+      "label": "Qwen3-VL-8B",
+      "load_probe_seconds": 104.0600574699929,
+      "warm_probe_seconds": 0.6152020809968235,
+      "estimated_load_seconds": 103.44485538899607,
+      "edge_warm_seconds": 58.66643623900018,
+      "load_ok": true,
+      "warm_probe_ok": true,
+      "edge_ok": true,
+      "summary": {
+        "risk": "Low",
+        "peopleCount": 3,
+        "missingHardhats": 0,
+        "missingVests": 0,
+        "detections": [],
+        "shouldReport": false,
+        "description": "A large yellow mobile crane is parked on a construction site under a clear blue sky. Three workers are visible in the foreground, standing near the crane's base. The crane's boom is raised high, and it appears to be idle. The background shows a fenced-off area and distant hills."
+      },
+      "edge_error": null
+    },
+    {
+      "ui_model": "local_gemma4_e4b",
+      "model_id": "gemma-4-e4b",
+      "label": "Gemma-4-E4B",
+      "load_probe_seconds": 106.58127333699667,
+      "warm_probe_seconds": 0.1771680899983039,
+      "estimated_load_seconds": 106.40410524699837,
+      "edge_warm_seconds": 66.47712777499692,
+      "load_ok": true,
+      "warm_probe_ok": true,
+      "edge_ok": true,
+      "summary": {
+        "risk": "Medium",
+        "peopleCount": 4,
+        "missingHardhats": 0,
+        "missingVests": 1,
+        "detections": [
+          "no_vest"
+        ],
+        "shouldReport": true,
+        "description": "A large yellow mobile crane is situated on a dry, open construction site area under a clear blue sky. There are a few workers visible near the crane and in the distance."
+      },
+      "edge_error": null
+    },
+    {
+      "ui_model": "local_gemma3n_e2b",
+      "model_id": "gemma-3n-e2b",
+      "label": "Gemma-3n-E2B",
+      "load_probe_seconds": 70.07662797599914,
+      "warm_probe_seconds": 0.19253783600288443,
+      "estimated_load_seconds": 69.88409013999626,
+      "edge_warm_seconds": 46.128011039996636,
+      "load_ok": true,
+      "warm_probe_ok": true,
+      "edge_ok": true,
+      "summary": {
+        "risk": "Medium",
+        "peopleCount": 3,
+        "missingHardhats": 0,
+        "missingVests": 2,
+        "detections": [
+          "no_hardhat",
+          "no_vest"
+        ],
+        "shouldReport": true,
+        "description": "The image shows a large yellow Wiesbauer crane on a construction site. There are three workers visible near the crane, and some construction materials are present in the background. The sky is clear and blue."
+      },
+      "edge_error": null
+    },
+    {
+      "ui_model": "local_gemma3n_e4b",
+      "model_id": "gemma-3n-e4b",
+      "label": "Gemma-3n-E4B",
+      "load_probe_seconds": 72.49311330199998,
+      "warm_probe_seconds": 0.22616101799940225,
+      "estimated_load_seconds": 72.26695228400058,
+      "edge_warm_seconds": 83.86213272099849,
+      "load_ok": true,
+      "warm_probe_ok": true,
+      "edge_ok": true,
+      "summary": {
+        "risk": "Medium",
+        "peopleCount": 4,
+        "missingHardhats": 2,
+        "missingVests": 2,
+        "detections": [
+          "no_hardhat",
+          "no_hardhat",
+          "no_vest",
+          "no_vest"
+        ],
+        "shouldReport": true,
+        "description": "The image shows a large yellow Weiserbauer crane on a construction site. There are four people visible near the base of the crane. The sky is clear and blue. There is some construction material and equipment in the background."
+      },
+      "edge_error": null
+    },
+    {
+      "ui_model": "openrouter",
+      "model_id": "qwen/qwen3-vl-8b-instruct",
+      "label": "OpenRouter Qwen3-VL-8B",
+      "load_probe_seconds": null,
+      "warm_probe_seconds": null,
+      "estimated_load_seconds": null,
+      "edge_warm_seconds": 19.078222010997706,
+      "load_ok": true,
+      "warm_probe_ok": true,
+      "edge_ok": true,
+      "summary": {
+        "risk": "Low",
+        "peopleCount": 3,
+        "missingHardhats": 0,
+        "missingVests": 0,
+        "detections": [],
+        "shouldReport": false,
+        "description": "A large yellow mobile crane is parked on a construction site under a clear blue sky. Three workers are visible near the crane's base. All three workers are wearing hard hats and high-visibility vests. The crane is stationary with its boom extended upward."
+      },
+      "edge_error": null
+    },
+    {
+      "ui_model": "openrouter",
+      "model_id": "qwen/qwen3-vl-32b-instruct",
+      "label": "OpenRouter Qwen3-VL-32B",
+      "load_probe_seconds": null,
+      "warm_probe_seconds": null,
+      "estimated_load_seconds": null,
+      "edge_warm_seconds": 18.555436376991565,
+      "load_ok": true,
+      "warm_probe_ok": true,
+      "edge_ok": true,
+      "summary": {
+        "risk": "Low",
+        "peopleCount": 3,
+        "missingHardhats": 0,
+        "missingVests": 0,
+        "detections": [
+          "machine_proximity"
+        ],
+        "shouldReport": false,
+        "description": "A large yellow mobile crane is positioned on a construction site under a clear blue sky. Three workers are visible in the foreground near the crane's base. The site appears to be an open area with some fencing and earthworks in the background."
+      },
+      "edge_error": null
+    }
+  ]
+}
