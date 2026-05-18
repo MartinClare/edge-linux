@@ -1,13 +1,13 @@
 # Edge AI – PPE / Safety Inspection
 
-Edge application for camera streams, object detection (YOLO), and cloud AI analysis (OpenRouter/Gemini). Runs on Rockchip RK3576 (ARM64) and similar boards.
+Edge application for camera streams, object detection (YOLO), and local vision LLM analysis. **Default vision path:** Gemma via embedded **vLLM** inside the FastAPI local vision server on port **8001** (`local_gemma4_e4b`). Optional: direct Qwen3-vLLM on **8002**, Transformers FastAPI, OpenRouter, or Rockchip targets.
 
 ## Structure
 
 | Path | Description |
 |------|-------------|
 | **python/** | FastAPI backend: RTSP streaming, detection (YOLO stub on RK3576), alarms, WebSocket feeds |
-| **cloud/** | Node.js middleware (axon-vision-api): image analysis via OpenRouter/Gemini |
+| **cloud/** | Node.js API (port 3001): Deep Vision + CMP; default `LOCAL_VISION_API_URL` (FastAPI on 8001, embedded vLLM for Gemma) |
 | **ppe-ui/** | React frontend (build output in `build/`) |
 | **deploy/** | Systemd unit files and device install scripts |
 | **app.config.json** | Cameras, central server URL, and runtime config |
@@ -17,19 +17,64 @@ Edge application for camera streams, object detection (YOLO), and cloud AI analy
 - Python 3.10+ with venv
 - Node.js 18+ (for cloud middleware)
 - Cameras reachable via RTSP
-- OpenRouter API key (for Gemini) – may require VPN in some regions
+- Local model weights (e.g. under `/home/.../models/`) and Hugging Face login if required for download
 
 ## Quick start
 
 ### 1. Python backend (port 8000)
 
+**NVIDIA DGX / other CUDA GPU:** install a CUDA build of PyTorch *before* the other packages. From the repo root:
+
 ```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -U pip
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+pip install -r python/requirements.txt
 cd python
-python -m venv ../venv
-source ../venv/bin/activate
-pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+**Rockchip edge devices** follow the install order in `python/requirements.txt` (PyTorch CPU, optional RKNN wheel, then `requirements-rk3588.txt` on-device).
+
+
+### 1b. Local vision via FastAPI + embedded vLLM (port 8001) — default for GPU edges
+
+**Start this before** the cloud service when using `vision.activeModel` **`local_gemma4_e4b`** (default in `app.config.json`):
+
+```bash
+cd deploy
+docker compose -f docker-compose.local-vision-ngc.yml up -d --build
+curl http://127.0.0.1:8001/health
+curl http://127.0.0.1:8001/v1/vision/models
+```
+
+See [python/LOCAL_VISION.md](python/LOCAL_VISION.md) and `deploy/docker-compose.local-vision-ngc.yml`. The FastAPI service embeds vLLM for Gemma when `LOCAL_VISION_BACKEND=vllm`.
+
+### 1c. Optional: direct OpenAI-compatible Qwen3-vLLM (port 8002)
+
+Use `deploy/docker-compose.local-vllm.yml` only if you select `vision.activeModel` **`local_qwen3_vllm`**. The default Gemma path does not require port 8002.
+
+### 1d. Optional: Transformers fallback inside FastAPI (port 8001)
+
+Set `LOCAL_VISION_BACKEND=transformers` to recover the older serialized Transformers behavior for Gemma. Qwen2.5/Qwen3 FastAPI model IDs still use the Transformers path.
+
+The bare-venv path is still available for CUDA stacks that support the GPU:
+
+```bash
+source venv/bin/activate
+export QWEN25_VL_PATH=/path/to/Qwen2.5-VL-7B-Instruct
+export QWEN3_VL_8B_PATH=/path/to/Qwen3-VL-8B-Instruct
+export GEMMA4_E4B_PATH=/path/to/gemma-4-E4B-it
+export GEMMA3N_E4B_PATH=/path/to/gemma-3n-E4B-it
+export GEMMA3N_E2B_PATH=/path/to/gemma-3n-E2B-it
+export DEFAULT_MODEL_ID=gemma-4-e4b
+export LOCAL_VISION_BACKEND=vllm
+cd python
+python -m uvicorn app.local_vision_server:app --host 0.0.0.0 --port 8001
+```
+
+See [python/LOCAL_VISION.md](python/LOCAL_VISION.md) for environment variables and troubleshooting.
 
 ### 2. Cloud middleware (port 3001)
 
@@ -37,7 +82,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 cd cloud
 npm install
 npm run build
-cp .env.example .env   # set OPENROUTER_API_KEY
+cp .env.example .env   # Default path: LOCAL_VISION_API_URL=http://127.0.0.1:8001
 npm start
 ```
 
@@ -48,7 +93,7 @@ Serve the pre-built static files (e.g. with the Python backend or nginx). The UI
 ## Configuration
 
 - **python/app.config.json** and root **app.config.json**: camera RTSP URLs and `centralServer.url`.
-- **cloud/.env**: `OPENROUTER_API_KEY` (and optional vars). Do not commit `.env`.
+- **cloud/.env**: **`LOCAL_VISION_API_URL`** for default FastAPI Gemma-vLLM (8001). Direct Qwen3-vLLM on 8002 uses `LOCAL_VLLM_API_URL` / `LOCAL_VLLM_MODEL`. OpenRouter: `OPENROUTER_API_KEY`.
 
 ## Deployment (systemd)
 
@@ -66,7 +111,7 @@ Adjust paths and `User`/`Group` in the service files to match your install.
 ## Notes
 
 - **RK3576**: The app uses a YOLO *stub* (no torch/ultralytics) so the backend runs without NPU/GPU; detection endpoints return empty results unless you deploy an RKNN-compatible stack.
-- **Gemini / OpenRouter**: If the API is geo-blocked, use a VPN (e.g. Mullvad WireGuard) so traffic from the device exits in a supported region.
+- **Local LLM**: Ensure **FastAPI on 8001** is up for the default Gemma-vLLM path. The Deep Vision background loop will not report to CMP when the evaluator sets `shouldReport: false` (or on evaluator failure, see `LOCAL_EVALUATOR_FAIL_NO_REPORT`).
 - **LAN access**: The built UI rewrites `localhost` to the current hostname so it works when opened from another machine on the network.
 
 ## Current deployed behavior (Mar 2026)

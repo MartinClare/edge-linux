@@ -85,6 +85,9 @@ export function buildAnalysisReportPayload(
   if (Array.isArray(analysis.detections)) {
     analysisObj.detections = analysis.detections;
   }
+  if (analysis.localMeta) {
+    analysisObj.localMeta = analysis.localMeta;
+  }
 
   const payload: Record<string, unknown> = {
     edgeCameraId: cameraId,

@@ -1,7 +1,7 @@
 {
   "name": "axon-vision-api",
   "version": "1.0.0",
-  "description": "Safety inspection image analysis API using OpenRouter Gemini",
+  "description": "Safety inspection image analysis API using local Qwen2.5-VL + optional Gemma 4",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

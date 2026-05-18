@@ -39,8 +39,27 @@ export interface GeminiDetection {
   description?: string;
 }
 
+/** Local inspector + Gemma evaluator metadata (no OpenRouter). */
+export type EvaluatorConfidence = 'Low' | 'Medium' | 'High';
+
+export interface LocalAnalysisMetadata {
+  shouldReport: boolean;
+  evaluatorRationale?: string;
+  confidence?: EvaluatorConfidence;
+  inspectorModel?: string;
+  evaluatorModel?: string;
+  yoloGate?: {
+    decision: string;
+    reason: string;
+    detectionCount?: number;
+    interestingCount?: number;
+    yoloLatencyMs?: number;
+    sceneChangeScore?: number;
+  };
+}
+
 /**
- * Complete safety analysis response from Gemini
+ * Complete safety analysis response (same JSON shape; optional local two-stage fields).
  */
 export interface SafetyAnalysisResult {
   overallDescription: string;
@@ -52,6 +71,7 @@ export interface SafetyAnalysisResult {
   missingHardhats?: number;
   missingVests?: number;
   detections?: GeminiDetection[];
+  localMeta?: LocalAnalysisMetadata;
 }
 
 /**

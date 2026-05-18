@@ -2,7 +2,7 @@
  * Axon Vision Safety Demo - Express Server
  * 
  * This server provides the API endpoint for image safety analysis
- * using Google Gemini's vision capabilities via OpenRouter.
+ * using local Qwen3-VL + Gemma 4 (see python/app/local_vision_server.py).
  */
 
 import 'dotenv/config';

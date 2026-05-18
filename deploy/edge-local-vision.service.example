@@ -1,0 +1,23 @@
+# Example systemd unit: local Qwen+Gemma vision server on port 8001
+# Copy to /etc/systemd/system/edge-local-vision.service, adjust User/Group/Paths, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now edge-local-vision
+
+[Unit]
+Description=Edge local vision LLM (Qwen3-VL + Gemma 4)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=edge
+Group=edge
+WorkingDirectory=/opt/edge-service/python
+Environment=INSPECTOR_MODEL_PATH=/opt/models/Qwen3-VL-32B-Instruct
+Environment=EVALUATOR_MODEL_PATH=/opt/models/gemma-4-31B-it
+# Use the project venv Python:
+ExecStart=/opt/edge-service/venv/bin/python -m uvicorn app.local_vision_server:app --host 0.0.0.0 --port 8001
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

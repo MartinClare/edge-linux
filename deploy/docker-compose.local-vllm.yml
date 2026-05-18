@@ -1,0 +1,39 @@
+# Local Qwen3-VL via vLLM OpenAI-compatible API (port 8002).
+# Run alongside docker-compose.local-vision-ngc.yml (8001) or standalone.
+#
+#   cd deploy && docker compose -f docker-compose.local-vllm.yml up -d
+#
+# Mount the same host model directory as the Transformers server (read-only).
+# Set VLLM_MODEL to your on-disk path or Hugging Face id.
+# Keep VLLM_SERVED_MODEL_NAME in sync with app.config.json vision.localVllmModel.
+
+services:
+  local-vllm:
+    image: vllm/vllm-openai:latest
+    container_name: avision-local-vllm
+    restart: unless-stopped
+    gpus: all
+    ipc: host
+    shm_size: "16gb"
+    ports:
+      - "8002:8002"
+    environment:
+      HF_HUB_OFFLINE: "1"
+    volumes:
+      - /home/interlv/models:/models:ro
+    command:
+      - --model
+      - ${VLLM_MODEL:-/models/qwen3VL32B-8bit}
+      - --served-model-name
+      - ${VLLM_SERVED_MODEL_NAME:-qwen3VL32B-8bit}
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8002"
+      - --dtype
+      - auto
+      - --trust-remote-code
+      - --limit-mm-per-prompt.video
+      - "0"
+      - --max-num-seqs
+      - ${VLLM_MAX_NUM_SEQS:-4}

@@ -77,6 +77,7 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
   const [geminiInterval] = useState(propGeminiInterval || 5);
   const [autoStart, setAutoStart] = useState(propAutoStart ?? false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isFullscreenLive, setIsFullscreenLive] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [latestGeminiResult, setLatestGeminiResult] = useState<GeminiAnalysisResult | null>(null);
   const [latestAlertResult] = useState<AlertAnalysisResult | null>(null);
@@ -156,6 +157,7 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
   const handleDisconnect = () => {
     setUserStoppedStream(true);
     setIsStreaming(false);
+    setIsFullscreenLive(false);
   };
 
   // Auto-start stream on mount when configured
@@ -192,15 +194,78 @@ const RTSPLiveStream: React.FC<RTSPLiveStreamProps> = ({
             </button>
           )}
           <div className="video-container" style={{ maxWidth: compact ? '100%' : '800px', width: '100%' }}>
-            <WebRTCStream
-              cameraId={cameraId}
-              cameraName={cameraName}
-              go2rtcUrl={go2rtcAvailable ? go2rtcUrl : undefined}
-              snapshotFallbackUrl={`${API_BASE_URL}/api/snapshot/${cameraId}`}
-              compact={compact}
-              autoPlay
-            />
+            <div
+              onClick={compact ? () => setIsFullscreenLive(true) : undefined}
+              style={{
+                cursor: compact ? 'zoom-in' : 'default',
+                width: '100%',
+              }}
+              title={compact ? 'Click to open live full screen' : undefined}
+            >
+              <WebRTCStream
+                cameraId={cameraId}
+                cameraName={cameraName}
+                go2rtcUrl={go2rtcAvailable ? go2rtcUrl : undefined}
+                snapshotFallbackUrl={`${API_BASE_URL}/api/snapshot/${cameraId}`}
+                compact={compact}
+                autoPlay
+                forceSnapshot={compact}
+                snapshotIntervalMs={compact ? 15_000 : 2_000}
+              />
+            </div>
           </div>
+          {compact && isFullscreenLive && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 9999,
+                background: 'rgba(0, 0, 0, 0.92)',
+                display: 'flex',
+                flexDirection: 'column',
+                padding: '1rem',
+                gap: '0.75rem',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  color: '#fff',
+                }}
+              >
+                <strong style={{ color: '#00d9ff' }}>{cameraName} - Live View</strong>
+                <button
+                  type="button"
+                  onClick={() => setIsFullscreenLive(false)}
+                  style={{
+                    padding: '0.5rem 0.8rem',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(255,255,255,0.35)',
+                    background: 'rgba(255,255,255,0.08)',
+                    color: '#fff',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <WebRTCStream
+                  cameraId={cameraId}
+                  cameraName={cameraName}
+                  go2rtcUrl={go2rtcAvailable ? go2rtcUrl : undefined}
+                  snapshotFallbackUrl={`${API_BASE_URL}/api/snapshot/${cameraId}`}
+                  compact={false}
+                  autoPlay
+                  forceSnapshot={false}
+                  snapshotIntervalMs={2_000}
+                />
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <>

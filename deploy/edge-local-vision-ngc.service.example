@@ -1,0 +1,25 @@
+# Example systemd unit: local Qwen+Gemma vision server via NVIDIA NGC container.
+# This is the preferred path for NVIDIA GB10 / compute capability 12.1, where
+# stock PyTorch CUDA 12.x wheels can fail with NVRTC architecture errors.
+#
+# Copy to /etc/systemd/system/edge-local-vision.service, adjust User/Group/Paths, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now edge-local-vision
+
+[Unit]
+Description=Edge local vision LLM (NGC PyTorch container)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=interlv
+Group=interlv
+WorkingDirectory=/home/interlv/Documents/avision/deploy
+ExecStart=/usr/bin/docker compose -f docker-compose.local-vision-ngc.yml up -d --build
+ExecStop=/usr/bin/docker compose -f docker-compose.local-vision-ngc.yml down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

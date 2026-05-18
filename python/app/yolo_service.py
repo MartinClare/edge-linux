@@ -1,6 +1,7 @@
 """YOLOv8 inference service with graceful fallback when unavailable."""
 
 import logging
+from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
@@ -59,6 +60,19 @@ def load_model():
         )
         return None
 
+    if MODEL_PATH and not _looks_like_remote_model(MODEL_PATH):
+        model_path = Path(MODEL_PATH)
+        if not model_path.exists():
+            _model = None
+            _actual_device = "cpu"
+            _model_loaded = False
+            logger.info(
+                "YOLO detection disabled: model file not found at %s. "
+                "Detection endpoints will return empty results.",
+                MODEL_PATH,
+            )
+            return None
+
     try:
         _model = YOLO(MODEL_PATH)
         _actual_device = _resolve_torch_device(DEVICE)
@@ -82,6 +96,10 @@ def load_model():
             exc,
         )
         return None
+
+
+def _looks_like_remote_model(model_path: str) -> bool:
+    return "://" in model_path or ("/" in model_path and not model_path.endswith((".pt", ".onnx", ".rknn")))
 
 
 def _to_detection_list(results) -> List[Detection]:

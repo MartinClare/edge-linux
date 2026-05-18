@@ -9,15 +9,9 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import FormData from 'form-data';
 import axios from 'axios';
-import { 
-  OPENROUTER_API_KEY, 
-  OPENROUTER_API_URL, 
-  MODEL_NAME, 
-  getSafetyAnalysisPrompt,
-  type SupportedLanguage
-} from './openRouterClient.js';
+import { type SupportedLanguage } from './visionClient.js';
+import { analyzeVideoFrameBuffer } from './analyzeCore.js';
 import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB } from './constants.js';
-import type { SafetyAnalysisResult } from './types.js';
 
 const router = Router();
 
@@ -40,119 +34,9 @@ const upload = multer({
 const YOLO_API_URL = process.env.YOLO_API_URL || 'http://localhost:8000';
 
 /**
- * Parse Gemini response
- */
-function parseGeminiResponse(responseText: string): SafetyAnalysisResult {
-  let cleanedText = responseText.trim();
-  
-  if (cleanedText.startsWith('```json')) {
-    cleanedText = cleanedText.slice(7);
-  } else if (cleanedText.startsWith('```')) {
-    cleanedText = cleanedText.slice(3);
-  }
-  
-  if (cleanedText.endsWith('```')) {
-    cleanedText = cleanedText.slice(0, -3);
-  }
-  
-  cleanedText = cleanedText.trim();
-  
-  try {
-    const parsed = JSON.parse(cleanedText) as SafetyAnalysisResult;
-    
-    if (!parsed.overallDescription || !parsed.overallRiskLevel) {
-      throw new Error('Invalid response structure');
-    }
-    
-    const categories = ['constructionSafety', 'fireSafety', 'propertySecurity'] as const;
-    for (const category of categories) {
-      if (!parsed[category]) {
-        parsed[category] = {
-          summary: 'Analysis not available for this category.',
-          issues: [],
-          recommendations: [],
-        };
-      }
-      parsed[category].issues = parsed[category].issues || [];
-      parsed[category].recommendations = parsed[category].recommendations || [];
-    }
-    
-    return parsed;
-  } catch (error) {
-    console.error('Failed to parse Gemini response:', error);
-    throw new Error('Failed to parse AI analysis response');
-  }
-}
-
-/**
- * Analyze a frame with Gemini
- */
-async function analyzeFrameWithGemini(
-  frameBase64: string,
-  language: SupportedLanguage,
-  frameNumber: number,
-  timestamp: number,
-  yoloDetections: any[]
-): Promise<SafetyAnalysisResult> {
-  const analysisPrompt = getSafetyAnalysisPrompt(language);
-  
-  // Add YOLO context to prompt
-  const detectionSummary = yoloDetections.map((d: any) => d.class_name).join(', ');
-  const enhancedPrompt = `${analysisPrompt}\n\n**Frame Context:**\n- Frame: ${frameNumber}\n- Time: ${timestamp.toFixed(2)}s\n- YOLO Detected: ${detectionSummary}\n\nProvide safety analysis for this specific moment.`;
-  
-  const imageDataUrl = `data:image/jpeg;base64,${frameBase64}`;
-  
-  const openRouterResponse = await fetch(OPENROUTER_API_URL, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'http://localhost:3001',
-      'X-Title': 'Axon Vision Video Analysis',
-    },
-    body: JSON.stringify({
-      model: MODEL_NAME,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: enhancedPrompt },
-            { type: 'image_url', image_url: { url: imageDataUrl } },
-          ],
-        },
-      ],
-    }),
-  });
-
-  if (!openRouterResponse.ok) {
-    const contentType = openRouterResponse.headers.get('content-type');
-    if (contentType?.includes('application/json')) {
-      const errorData = await openRouterResponse.json() as { error?: { message?: string } };
-      throw new Error(errorData.error?.message || `API error: ${openRouterResponse.status}`);
-    }
-    throw new Error(`API error: ${openRouterResponse.status}`);
-  }
-
-  const result = await openRouterResponse.json() as {
-    choices?: Array<{
-      message?: {
-        content?: string;
-      };
-    }>;
-  };
-  const responseText = result.choices?.[0]?.message?.content;
-  
-  if (!responseText) {
-    throw new Error('Empty response from AI model');
-  }
-
-  return parseGeminiResponse(responseText);
-}
-
-/**
  * POST /api/analyze-video
- * 
- * Process video with YOLO detection on all frames and Gemini verification on interval frames
+ *
+ * YOLO on Python backend; vision LLM frames use local Qwen3-VL inspector.
  */
 router.post('/analyze-video', (req: Request, res: Response) => {
   upload.single('video')(req, res, async (err) => {
@@ -240,13 +124,13 @@ router.post('/analyze-video', (req: Request, res: Response) => {
         return index % frameInterval === 0 || index === yoloResult.frames.length - 1;
       });
 
-      console.log(`🤖 Step 2: Analyzing ${framesToAnalyze.length} frames with Gemini in parallel (every ${geminiInterval}s)...`);
+      console.log(`🤖 Step 2: Analyzing ${framesToAnalyze.length} frames with local vision in parallel (every ${geminiInterval}s)...`);
 
-      // Step 3: Analyze ALL required frames with Gemini in parallel
+      // Step 3: Analyze required frames in parallel
       const geminiPromises = framesToAnalyze.map(async (frame: any, index: number) => {
         try {
           console.log(`   Analyzing frame ${frame.frame_index} (${index + 1}/${framesToAnalyze.length})...`);
-          const analysis = await analyzeFrameWithGemini(
+          const analysis = await analyzeVideoFrameBuffer(
             frame.frame_data,
             language,
             frame.frame_index,

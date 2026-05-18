@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef, useRef } from 'react';
 import RTSPLiveStream from './RTSPLiveStream';
 import GeminiPpeNarrative from './GeminiPpeNarrative';
-import SettingsModal from './SettingsModal';
+import SettingsModal, { type VisionActiveModel } from './SettingsModal';
 import type { AnalysisMode, GeminiAnalysisResult, AlertAnalysisResult } from '../types/detection.types';
 import { API_BASE_URL } from '../config/api';
 
@@ -45,6 +45,33 @@ interface AppConfig {
   };
   centralServer?: CentralServerConfig;
   tailscale?: { enabled: boolean; mode?: 'inbound' | 'outbound' };
+  vision?: {
+    activeModel?: string;
+    openrouterModel?: string;
+    openrouterModelFallback?: string;
+    localVllmApiUrl?: string;
+    localVllmModel?: string;
+    maxConcurrentLocalVllm?: number;
+    maxNewTokens?: number;
+    cmpReporting?: {
+      heartbeatIntervalSec?: number;
+      onlyReportElevated?: boolean;
+      minAnalysisReportIntervalSec?: number;
+    };
+  };
+}
+
+function coalesceVisionModel(m: string | undefined): VisionActiveModel {
+  if (
+    m === 'local_qwen2_5_vl_7b' ||
+    m === 'local_qwen3_vl_8b' ||
+    m === 'local_qwen3_vllm' ||
+    m === 'local_gemma4_e4b' ||
+    m === 'local_gemma3n_e4b' ||
+    m === 'local_gemma3n_e2b' ||
+    m === 'openrouter'
+  ) return m;
+  return 'local_gemma4_e4b';
 }
 
 interface MultiCameraGridProps {
@@ -64,6 +91,8 @@ interface BackendDeepVisionResult {
   analysis: GeminiAnalysisResult;
 }
 
+const CAMERA_PAGE_SIZE = 4;
+
 const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(function MultiCameraGrid(
   { analysisMode, onGeminiResult, onAlertResult },
   ref
@@ -79,6 +108,7 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
   const [geminiInterval, setGeminiInterval] = useState<number>(5);
   const [autoStart, setAutoStart] = useState<boolean>(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [cameraPage, setCameraPage] = useState(0);
   useImperativeHandle(ref, () => ({
     openSettings: () => setShowSettings(true),
   }), []);
@@ -291,6 +321,12 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
     geminiInterval: number; 
     autoStart: boolean;
     deepVisionEnabled: boolean;
+    activeVisionModel: VisionActiveModel;
+    openrouterModel: string;
+    openrouterModelFallback: string;
+    localVllmApiUrl: string;
+    localVllmModel: string;
+    maxConcurrentLocalVllm: number;
     centralServer: CentralServerConfig;
     tailscale: { enabled: boolean; mode: 'inbound' | 'outbound' };
   }) => {
@@ -311,6 +347,15 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
       },
       centralServer: settings.centralServer,
       tailscale: settings.tailscale,
+      vision: {
+        activeModel: settings.activeVisionModel,
+        openrouterModel: settings.openrouterModel,
+        openrouterModelFallback: settings.openrouterModelFallback,
+        localVllmApiUrl: settings.localVllmApiUrl,
+        localVllmModel: settings.localVllmModel,
+        maxConcurrentLocalVllm: settings.maxConcurrentLocalVllm,
+        maxNewTokens: 1536,
+      },
     } : prev);
     console.log('[MultiCamera] Settings saved:', settings);
     // Force remount of streams by updating config
@@ -353,6 +398,33 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
   };
 
   const configCameras = config?.rtsp?.cameras ?? [];
+  const totalCameraPages = Math.max(1, Math.ceil(enabledCameras.length / CAMERA_PAGE_SIZE));
+  const currentCameraPage = Math.min(cameraPage, totalCameraPages - 1);
+  const pageStart = currentCameraPage * CAMERA_PAGE_SIZE;
+  const pageCameras = enabledCameras.slice(pageStart, pageStart + CAMERA_PAGE_SIZE);
+  const pageEnd = pageStart + pageCameras.length;
+  const nextPageStart = (currentCameraPage + 1) * CAMERA_PAGE_SIZE;
+  const nextPageCameras = enabledCameras.slice(nextPageStart, nextPageStart + CAMERA_PAGE_SIZE);
+
+  useEffect(() => {
+    if (cameraPage > totalCameraPages - 1) {
+      setCameraPage(totalCameraPages - 1);
+    }
+  }, [cameraPage, totalCameraPages]);
+
+  useEffect(() => {
+    if (nextPageCameras.length === 0) return;
+    const timer = setTimeout(() => {
+      for (const camera of nextPageCameras) {
+        if (!isEffectivelyEnabled(camera)) continue;
+        void fetch(`${API_BASE_URL}/api/snapshot/${camera.id}?prefetch=1&t=${Date.now()}`, {
+          cache: 'no-store',
+        }).catch(() => {});
+      }
+    }, 4_000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCameraPage, enabledCameras, cameraEnabled]);
 
   const renderStream = (camera: CameraConfig, index: number, singleView: boolean) => {
     const effectiveUrl = getEffectiveStreamUrl(camera);
@@ -808,7 +880,7 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
 
       {config && configCameras.length > 0 && (
         <div style={{ width: '100%' }}>
-          {/* View: Multi-camera only; single camera views removed */}
+          {/* View: Multi-camera only; paginated to keep the browser responsive */}
           <div style={{
             display: 'flex',
             flexWrap: 'wrap',
@@ -834,7 +906,7 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                 alignItems: 'center',
                 gap: '0.75rem'
               }}>
-                <span>📺 All Cameras</span>
+                <span>📺 Cameras {pageStart + 1}-{pageEnd} of {enabledCameras.length}</span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                   <span style={{
                     width: '8px',
@@ -856,18 +928,53 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                   <span>{enabledCameras.filter(c => !isEffectivelyEnabled(c)).length} inactive</span>
                 </span>
               </span>
+              <button
+                type="button"
+                onClick={() => setCameraPage(page => Math.max(0, page - 1))}
+                disabled={currentCameraPage === 0}
+                style={{
+                  padding: '0.5rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(0, 217, 255, 0.35)',
+                  background: currentCameraPage === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(0, 217, 255, 0.12)',
+                  color: currentCameraPage === 0 ? 'rgba(255,255,255,0.35)' : '#00d9ff',
+                  cursor: currentCameraPage === 0 ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                Previous
+              </button>
+              <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: '0.9rem' }}>
+                Page {currentCameraPage + 1} / {totalCameraPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCameraPage(page => Math.min(totalCameraPages - 1, page + 1))}
+                disabled={currentCameraPage >= totalCameraPages - 1}
+                style={{
+                  padding: '0.5rem 0.8rem',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(0, 217, 255, 0.35)',
+                  background: currentCameraPage >= totalCameraPages - 1 ? 'rgba(255,255,255,0.05)' : 'rgba(0, 217, 255, 0.12)',
+                  color: currentCameraPage >= totalCameraPages - 1 ? 'rgba(255,255,255,0.35)' : '#00d9ff',
+                  cursor: currentCameraPage >= totalCameraPages - 1 ? 'not-allowed' : 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                Next
+              </button>
             </div>
           </div>
 
-          {/* Multi-camera view: vertical stack with each camera in a row */}
+          {/* Multi-camera view: current page only, rendered as a 2x2 grid */}
           {(
             <div style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
               gap: '1rem',
               width: '100%'
             }}>
-              {enabledCameras.map((camera, index) => (
+              {pageCameras.map((camera, index) => (
                 <div
                   key={camera.id}
                   style={{
@@ -875,7 +982,7 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
                     borderRadius: '8px',
                     padding: '1rem',
                     background: 'rgba(0, 0, 0, 0.3)',
-                    minHeight: '300px',
+                    minHeight: '260px',
                     width: '100%'
                   }}
                 >
@@ -940,6 +1047,12 @@ const MultiCameraGrid = forwardRef<MultiCameraGridHandle, MultiCameraGridProps>(
           configCloudCmpUrl={config.centralServer?.cloudUrl ?? ''}
           configTailscaleEnabled={config.tailscale?.enabled ?? true}
           configTailscaleMode={config.tailscale?.mode ?? 'inbound'}
+          configActiveVisionModel={coalesceVisionModel(config.vision?.activeModel)}
+          configOpenrouterModel={config.vision?.openrouterModel?.trim() || 'qwen/qwen3-vl-32b-instruct'}
+          configOpenrouterModelFallback={config.vision?.openrouterModelFallback?.trim() || ''}
+          configLocalVllmApiUrl={config.vision?.localVllmApiUrl?.trim() || 'http://127.0.0.1:8002'}
+          configLocalVllmModel={config.vision?.localVllmModel?.trim() || ''}
+          configMaxConcurrentLocalVllm={Math.max(1, Math.min(32, config.vision?.maxConcurrentLocalVllm ?? 2))}
           onClose={() => setShowSettings(false)}
           onSave={handleSettingsSave}
         />

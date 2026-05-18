@@ -113,6 +113,10 @@ function sanitiseForFrontend(config: Record<string, unknown>): Record<string, un
     delete cs.apiKey;
     delete cs.vercelBypassToken;
   }
+  const v = safe.vision as Record<string, unknown> | undefined;
+  if (v && typeof v === 'object' && v.openrouterApiKey) {
+    delete v.openrouterApiKey;
+  }
   return safe;
 }
 
@@ -226,8 +230,12 @@ router.put('/config', (req: Request, res: Response) => {
       }
     }
 
-    if (!rtsp && !('centralServer' in body) && !('vpn' in body) && !('tailscale' in body) && !('network' in body) && !('ui' in body)) {
-      res.status(400).json({ error: 'Request must include at least one of: rtsp, centralServer, vpn, tailscale, network, ui' });
+    if ('vision' in body) {
+      config.vision = mergeSection(config.vision, body.vision);
+    }
+
+    if (!rtsp && !('centralServer' in body) && !('vpn' in body) && !('tailscale' in body) && !('network' in body) && !('ui' in body) && !('vision' in body)) {
+      res.status(400).json({ error: 'Request must include at least one of: rtsp, centralServer, vpn, tailscale, network, ui, vision' });
       return;
     }
 
@@ -316,6 +324,9 @@ router.get('/health/all', async (_req: Request, res: Response) => {
     systemd[label] = getServiceStatus(units);
   }
 
+  const portLocalVision = await checkPort('localhost', 8001);
+  const portLocalVllm = await checkPort('localhost', 8002);
+
   res.json({
     timestamp: new Date().toISOString(),
     services: {
@@ -323,6 +334,8 @@ router.get('/health/all', async (_req: Request, res: Response) => {
       'PPE UI':          { ok: portPpeUi,       port: 3000 },
       'CMP':             { ok: portCmp,          port: 3002 },
       'go2rtc':          { ok: portGo2rtc,       port: GO2RTC_PORT },
+      'Local vision (FastAPI)': { ok: portLocalVision, port: 8001 },
+      'Local vLLM':      { ok: portLocalVllm,   port: 8002 },
     },
     systemd,
     streams,

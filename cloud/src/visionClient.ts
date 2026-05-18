@@ -1,36 +1,84 @@
 /**
- * OpenRouter API Client Configuration
- * 
- * This module provides access to Gemini and other models via OpenRouter.
- * OpenRouter is simpler than Vertex AI - just needs one API key!
- * 
- * Get your API key from: https://openrouter.ai/keys
- * 
- * MODEL SELECTION:
- * - Currently using "google/gemini-3.1-pro-preview" (Gemini 3.1 Pro – highest accuracy)
- * - Alternative: "google/gemini-3-flash-preview" (Gemini 3 Flash – fast, near-Pro quality)
- * - Alternative: "google/gemini-2.5-flash" (Gemini 2.5 Flash – stable)
- * - Check https://openrouter.ai/models for available models
+ * Local vision LLM client (Qwen2.5-VL inspector + optional Gemma 4 evaluator)
+ *
+ * Start the Python service (see python/app/local_vision_server.py):
+ *   LOCAL_VISION_API_URL=http://127.0.0.1:8001
  */
+export const LOCAL_VISION_API_URL = process.env.LOCAL_VISION_API_URL || 'http://127.0.0.1:8001';
+export const LOCAL_VISION_TIMEOUT_MS = Math.max(
+  5_000,
+  parseInt(process.env.LOCAL_VISION_TIMEOUT_MS || '600000', 10) || 600_000,
+);
 
-// Ensure API key is set
-if (!process.env.OPENROUTER_API_KEY) {
-  console.error('ERROR: OPENROUTER_API_KEY environment variable is not set');
-  console.error('Get your API key from: https://openrouter.ai/keys');
-  process.exit(1);
-}
+/** Display names for logging / localMeta (paths live on the Python service). */
+export const INSPECTOR_MODEL_ID = process.env.INSPECTOR_MODEL_ID || 'Qwen2.5-VL-7B-Instruct';
+export const EVALUATOR_MODEL_ID = process.env.EVALUATOR_MODEL_ID || 'google/gemma-4-31B-it';
 
-export const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-export const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+export type VisionRole = 'inspector' | 'evaluator' | 'alert';
+
+export type CallLocalVisionOptions = {
+  /** Python `model_id` (qwen2-5-vl-7b | qwen3-vl-8b | gemma-4-e4b | gemma-3n-e4b | gemma-3n-e2b). */
+  modelId?: string;
+  maxNewTokens?: number;
+};
 
 /**
- * Available models on OpenRouter:
- * - qwen/qwen2.5-vl-72b-instruct: Qwen 2.5 VL 72B (vision+text, works in HK region)
- * - qwen/qwen3.5-9b: Qwen 3.5 9B (text-only fallback, fast)
- * - google/gemini-3.1-pro-preview: region-blocked in HK
- * - google/gemini-2.5-flash: region-blocked in HK
+ * Call the local Python vision server. `imageDataUrl` must be `data:<mime>;base64,...`.
  */
-export const MODEL_NAME = process.env.VISION_MODEL || 'qwen/qwen3-vl-32b-instruct';
+export async function callLocalVision(
+  role: VisionRole,
+  imageDataUrl: string,
+  prompt: string,
+  sizeKB: number,
+  options?: CallLocalVisionOptions,
+): Promise<string> {
+  const m = imageDataUrl.match(/^data:([^;]+);base64,([\s\S]+)$/);
+  if (!m) {
+    throw new Error('Invalid image data URL (expected data:<mime>;base64,...)');
+  }
+  const image_mime = m[1];
+  const image_base64 = m[2].replace(/\s/g, '');
+  const base = LOCAL_VISION_API_URL.replace(/\/$/, '');
+  const url = `${base}/v1/vision/generate`;
+  const start = Date.now();
+  const ts = new Date().toISOString();
+  const modelLine = options?.modelId ? ` model_id=${options.modelId}` : '';
+  console.log(
+    `[${ts}] Local vision (role=${role}, ${sizeKB.toFixed(1)} KB)${modelLine} -> ${url}`,
+  );
+
+  const ac = new AbortController();
+  const to = setTimeout(() => {
+    ac.abort();
+  }, LOCAL_VISION_TIMEOUT_MS);
+
+  let resp: Response;
+  try {
+    const payload: Record<string, unknown> = { role, prompt, image_mime, image_base64 };
+    if (options?.modelId) payload.model_id = options.modelId;
+    if (options?.maxNewTokens != null) payload.max_new_tokens = options.maxNewTokens;
+    resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ac.signal,
+    });
+  } finally {
+    clearTimeout(to);
+  }
+
+  const duration = ((Date.now() - start) / 1000).toFixed(2);
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Local vision HTTP ${resp.status} (took ${duration}s): ${errText.slice(0, 500)}`);
+  }
+  const j = (await resp.json()) as { text?: string; role?: string; model_path?: string };
+  if (!j.text?.trim()) {
+    throw new Error('Empty text from local vision service');
+  }
+  console.log(`[${ts}] Local vision success (role=${role}, took ${duration}s)`);
+  return j.text;
+}
 
 /**
  * Supported languages for analysis output
@@ -455,4 +503,40 @@ export function getAlertAnalysisPrompt(language: SupportedLanguage = 'en'): stri
   }
   
   return `${BASE_ALERT_PROMPT}\n\n**IMPORTANT: ${languageInstruction}**`;
+}
+
+const EVALUATOR_WRAPPER = `You are a senior safety compliance **evaluator**. A vision model (the inspector) produced a JSON safety analysis. You are given the same image. Your job is to **verify** the inspector's claims against the image, reduce false positives, and decide if an external incident report should be raised.
+
+**Inspector output (JSON) — do not copy blindly; verify against the image:**
+\`\`\`
+{{INSPECTOR_JSON}}
+\`\`\`
+
+**Your tasks**
+1. Visually confirm or refute PPE and hazard claims. If the image is too unclear, be conservative: do not confirm violations you cannot see clearly.
+2. Set **shouldReport** to true only if, after your review, a genuine reportable safety issue remains (PPE violation with clear visibility, or a clear critical hazard from the allowed detection labels).
+3. If you reject reporting, set **shouldReport** to false and explain briefly in **rationale**.
+
+**Output format — STRICT JSON only (no markdown fences).** The **finalAnalysis** object must use the same schema as the inspector: overallDescription, overallRiskLevel, peopleCount, missingHardhats, missingVests, detections, constructionSafety, fireSafety, propertySecurity. **finalAnalysis** is your corrected final result (may match the inspector if you agree).
+
+{
+  "shouldReport": true | false,
+  "confidence": "Low" | "Medium" | "High",
+  "rationale": "short string",
+  "finalAnalysis": { }
+}`;
+
+/**
+ * Second-pass prompt for Gemma 4: validate inspector JSON + image, produce final analysis + shouldReport.
+ */
+export function getEvaluatorPrompt(
+  language: SupportedLanguage,
+  inspectorJson: string,
+): string {
+  const body = EVALUATOR_WRAPPER.replace('{{INSPECTOR_JSON}}', inspectorJson);
+  const languageInstruction = LANGUAGE_INSTRUCTIONS[language] || LANGUAGE_INSTRUCTIONS['en'];
+  if (language === 'zh-TW') {
+    return `【重要！JSON 內的說明文字與 finalAnalysis 必須使用繁體中文。】\n\n${body}\n\n【${languageInstruction}】`;
+  }
+  return `${body}\n\n**Language: ${languageInstruction}**`;
 }

@@ -25,10 +25,12 @@ export interface WebRTCStreamProps {
   snapshotFallbackUrl?: string; // URL to poll for JPEG if WebRTC unavailable
   compact?: boolean;
   autoPlay?: boolean;
+  forceSnapshot?: boolean;     // use snapshot transport immediately for dense grids
+  snapshotIntervalMs?: number; // snapshot refresh cadence when in snapshot mode
 }
 
 const DEFAULT_GO2RTC = 'http://localhost:1984';
-const SNAPSHOT_INTERVAL_MS = 2_000;
+const DEFAULT_SNAPSHOT_INTERVAL_MS = 2_000;
 
 type StreamState = 'idle' | 'connecting' | 'playing' | 'snapshot' | 'error';
 
@@ -46,6 +48,8 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
   snapshotFallbackUrl,
   compact = false,
   autoPlay = true,
+  forceSnapshot = false,
+  snapshotIntervalMs = DEFAULT_SNAPSHOT_INTERVAL_MS,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -76,14 +80,17 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
     if (!snapshotFallbackUrl) { setState('error'); return; }
     setState('snapshot');
 
-    // Automatically retry WebRTC after a delay — go2rtc may have recovered.
+    // Automatically retry WebRTC after a delay when WebRTC is the preferred
+    // transport. Dense grid pages force snapshots to avoid browser overload.
     if (webrtcRetryRef.current) clearTimeout(webrtcRetryRef.current);
-    webrtcRetryRef.current = setTimeout(() => {
-      webrtcRetryRef.current = null;
-      console.log(`[WebRTC-${cameraId}] Auto-retrying WebRTC after snapshot fallback`);
-      reconnectCountRef.current = 0;
-      startWebRTCRef.current();
-    }, WEBRTC_RETRY_FROM_SNAPSHOT_MS);
+    if (!forceSnapshot) {
+      webrtcRetryRef.current = setTimeout(() => {
+        webrtcRetryRef.current = null;
+        console.log(`[WebRTC-${cameraId}] Auto-retrying WebRTC after snapshot fallback`);
+        reconnectCountRef.current = 0;
+        startWebRTCRef.current();
+      }, WEBRTC_RETRY_FROM_SNAPSHOT_MS);
+    }
 
     const refresh = async () => {
       try {
@@ -133,8 +140,11 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
     };
 
     void refresh();
-    snapshotTimerRef.current = setInterval(refresh, SNAPSHOT_INTERVAL_MS);
-  }, [clearSnapshotImage, snapshotFallbackUrl, cameraId]);
+    snapshotTimerRef.current = setInterval(
+      refresh,
+      Math.max(1_000, snapshotIntervalMs),
+    );
+  }, [clearSnapshotImage, snapshotFallbackUrl, cameraId, forceSnapshot, snapshotIntervalMs]);
 
   const stopSnapshot = useCallback(() => {
     if (snapshotTimerRef.current) {
@@ -291,13 +301,19 @@ const WebRTCStream: React.FC<WebRTCStreamProps> = ({
   // ── Auto-play on mount ────────────────────────────────────────────
   useEffect(() => {
     reconnectCountRef.current = 0;
-    if (autoPlay) startWebRTC();
+    if (autoPlay) {
+      if (forceSnapshot) {
+        startSnapshot();
+      } else {
+        startWebRTC();
+      }
+    }
     return () => {
       stopWebRTC();
       stopSnapshot();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraId]);
+  }, [cameraId, forceSnapshot]);
 
   // ── Styles ───────────────────────────────────────────────────────
   const containerStyle: React.CSSProperties = {

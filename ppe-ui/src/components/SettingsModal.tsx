@@ -19,6 +19,15 @@ interface Schedule {
   nightInterval: number;
 }
 
+export type VisionActiveModel =
+  | 'local_qwen2_5_vl_7b'
+  | 'local_qwen3_vl_8b'
+  | 'local_qwen3_vllm'
+  | 'local_gemma4_e4b'
+  | 'local_gemma3n_e4b'
+  | 'local_gemma3n_e2b'
+  | 'openrouter';
+
 interface AppSettings {
   cameraUrls: Record<string, string>;
   cameraTailscaleUrls: Record<string, string>;
@@ -30,6 +39,12 @@ interface AppSettings {
   schedule: Schedule;
   autoStart: boolean;
   deepVisionEnabled: boolean;
+  activeVisionModel: VisionActiveModel;
+  openrouterModel: string;
+  openrouterModelFallback: string;
+  localVllmApiUrl: string;
+  localVllmModel: string;
+  maxConcurrentLocalVllm: number;
   centralServer: {
     enabled: boolean;
     url: string;
@@ -53,6 +68,12 @@ interface SettingsModalProps {
   configCloudCmpUrl: string;
   configTailscaleEnabled: boolean;
   configTailscaleMode: 'inbound' | 'outbound';
+  configActiveVisionModel: VisionActiveModel;
+  configOpenrouterModel: string;
+  configOpenrouterModelFallback: string;
+  configLocalVllmApiUrl: string;
+  configLocalVllmModel: string;
+  configMaxConcurrentLocalVllm: number;
   onClose: () => void;
   onSave: (settings: AppSettings) => void;
 }
@@ -77,6 +98,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   configCloudCmpUrl,
   configTailscaleEnabled,
   configTailscaleMode,
+  configActiveVisionModel,
+  configOpenrouterModel,
+  configOpenrouterModelFallback,
+  configLocalVllmApiUrl,
+  configLocalVllmModel,
+  configMaxConcurrentLocalVllm,
   onClose,
   onSave
 }) => {
@@ -95,6 +122,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [cmpUrl, setCmpUrl] = useState(configCmpUrl);
   const [tailscaleEnabled, setTailscaleEnabled] = useState(configTailscaleEnabled);
   const [tailscaleMode, setTailscaleMode] = useState<'inbound' | 'outbound'>(configTailscaleMode);
+  const [activeVisionModel, setActiveVisionModel] = useState<VisionActiveModel>(configActiveVisionModel);
+  const [openrouterModel, setOpenrouterModel] = useState(configOpenrouterModel);
+  const [openrouterModelFallback, setOpenrouterModelFallback] = useState(configOpenrouterModelFallback);
+  const [localVllmApiUrl, setLocalVllmApiUrl] = useState(configLocalVllmApiUrl);
+  const [localVllmModel, setLocalVllmModel] = useState(configLocalVllmModel);
+  const [maxConcurrentLocalVllm, setMaxConcurrentLocalVllm] = useState(configMaxConcurrentLocalVllm);
   const [hasChanges, setHasChanges] = useState(false);
   const [serviceStatus, setServiceStatus] = useState<Record<string, { label: string; status: string }> | null>(null);
   const [serviceStatusLoading, setServiceStatusLoading] = useState(false);
@@ -125,6 +158,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     fetchServiceStatus();
   }, [fetchServiceStatus]);
+
+  useEffect(() => {
+    setActiveVisionModel(configActiveVisionModel);
+    setOpenrouterModel(configOpenrouterModel);
+    setOpenrouterModelFallback(configOpenrouterModelFallback);
+    setLocalVllmApiUrl(configLocalVllmApiUrl);
+    setLocalVllmModel(configLocalVllmModel);
+    setMaxConcurrentLocalVllm(configMaxConcurrentLocalVllm);
+  }, [
+    configActiveVisionModel,
+    configOpenrouterModel,
+    configOpenrouterModelFallback,
+    configLocalVllmApiUrl,
+    configLocalVllmModel,
+    configMaxConcurrentLocalVllm,
+  ]);
 
   const handleCameraUrlChange = (cameraId: string, url: string) => {
     setCameraUrls(prev => ({ ...prev, [cameraId]: url }));
@@ -179,6 +228,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleSave = async () => {
+    if (activeVisionModel === 'local_qwen3_vllm' && !localVllmModel.trim()) {
+      alert('Save failed: local vLLM model is required when active model is local_qwen3_vllm.');
+      return;
+    }
+    if (activeVisionModel === 'openrouter' && !openrouterModel.trim()) {
+      alert('Save failed: OpenRouter model ID is required when active model is openrouter.');
+      return;
+    }
     const settings: AppSettings = {
       cameraUrls,
       cameraTailscaleUrls,
@@ -190,6 +247,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       schedule,
       autoStart,
       deepVisionEnabled,
+      activeVisionModel,
+      openrouterModel: openrouterModel.trim(),
+      openrouterModelFallback: openrouterModelFallback.trim(),
+      localVllmApiUrl: localVllmApiUrl.trim() || 'http://127.0.0.1:8002',
+      localVllmModel: localVllmModel.trim(),
+      maxConcurrentLocalVllm: Math.max(1, Math.min(32, maxConcurrentLocalVllm || 2)),
       centralServer: {
         enabled: cmpEnabled,
         url: cmpUrl.trim(),
@@ -225,6 +288,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       },
       centralServer: settings.centralServer,
       tailscale: settings.tailscale,
+      vision: {
+        activeModel: settings.activeVisionModel,
+        openrouterModel: settings.openrouterModel,
+        openrouterModelFallback: settings.openrouterModelFallback,
+        localVllmApiUrl: settings.localVllmApiUrl,
+        localVllmModel: settings.localVllmModel,
+        maxConcurrentLocalVllm: settings.maxConcurrentLocalVllm,
+        maxNewTokens: 1536,
+      },
     };
     try {
       const res = await fetch(`${baseUrl}/api/config`, {
@@ -265,6 +337,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setCmpUrl(configCmpUrl);
       setTailscaleEnabled(configTailscaleEnabled);
       setTailscaleMode(configTailscaleMode);
+      setActiveVisionModel(configActiveVisionModel);
+      setOpenrouterModel(configOpenrouterModel);
+      setOpenrouterModelFallback(configOpenrouterModelFallback);
+      setLocalVllmApiUrl(configLocalVllmApiUrl);
+      setLocalVllmModel(configLocalVllmModel);
+      setMaxConcurrentLocalVllm(configMaxConcurrentLocalVllm);
       setHasChanges(true);
     }
   };
@@ -722,6 +800,99 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <small style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginLeft: '1.5rem', display: 'block', marginTop: '0.25rem' }}>
                   If disabled, default mode falls back to Realtime Detection (YOLO)
                 </small>
+              </div>
+
+              <div style={{ paddingTop: '0.5rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.4rem', color: 'rgba(255,255,255,0.9)', fontSize: '0.9rem' }}>
+                  Vision / safety model
+                </label>
+                <select
+                  value={activeVisionModel}
+                  onChange={(e) => {
+                    setActiveVisionModel(e.target.value as VisionActiveModel);
+                    setHasChanges(true);
+                  }}
+                  style={{
+                    width: '100%',
+                    maxWidth: '420px',
+                    padding: '0.5rem 0.6rem',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(0,217,255,0.35)',
+                    background: 'rgba(0,0,0,0.45)',
+                    color: '#fff',
+                    fontSize: '0.9rem',
+                  }}
+                >
+                  <option value="local_qwen2_5_vl_7b">Qwen2.5-VL-7B (local, port 8001)</option>
+                  <option value="local_qwen3_vl_8b">Qwen3-VL-8B (local Transformers, port 8001)</option>
+                  <option value="local_qwen3_vllm">Qwen3-VL (local vLLM, port 8002)</option>
+                  <option value="local_gemma4_e4b">Gemma-4-E4B-IT (FastAPI vLLM, port 8001)</option>
+                  <option value="local_gemma3n_e4b">Gemma-3n-E4B-IT (local)</option>
+                  <option value="local_gemma3n_e2b">Gemma-3n-E2B-IT (local)</option>
+                  <option value="openrouter">OpenRouter (online — set OPENROUTER_API_KEY on edge host)</option>
+                </select>
+                <small style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.75rem', display: 'block', marginTop: '0.35rem' }}>
+                  One local model loaded at a time. Switching models reloads weights. OpenRouter does not use the local GPU server.
+                </small>
+                {(activeVisionModel === 'local_qwen3_vllm' || activeVisionModel.startsWith('local_gemma')) && (
+                  <div style={{ marginTop: '0.6rem', display: 'grid', gap: '0.5rem', maxWidth: '480px' }}>
+                    {activeVisionModel === 'local_qwen3_vllm' && <div>
+                      <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.75)' }}>vLLM base URL</label>
+                      <input
+                        type="text"
+                        value={localVllmApiUrl}
+                        onChange={(e) => { setLocalVllmApiUrl(e.target.value); setHasChanges(true); }}
+                        style={{ width: '100%', marginTop: '0.2rem', padding: '0.4rem', borderRadius: '4px', border: '1px solid rgba(0,217,255,0.3)', background: 'rgba(0,0,0,0.35)', color: '#fff' }}
+                        placeholder="http://127.0.0.1:8002"
+                      />
+                    </div>}
+                    {activeVisionModel === 'local_qwen3_vllm' && <div>
+                      <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.75)' }}>Served model name</label>
+                      <input
+                        type="text"
+                        value={localVllmModel}
+                        onChange={(e) => { setLocalVllmModel(e.target.value); setHasChanges(true); }}
+                        style={{ width: '100%', marginTop: '0.2rem', padding: '0.4rem', borderRadius: '4px', border: '1px solid rgba(0,217,255,0.3)', background: 'rgba(0,0,0,0.35)', color: '#fff' }}
+                        placeholder="Qwen3-VL-8B-Instruct"
+                      />
+                    </div>}
+                    <div>
+                      <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.75)' }}>Max concurrent analyses (edge)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={32}
+                        value={maxConcurrentLocalVllm}
+                        onChange={(e) => { setMaxConcurrentLocalVllm(parseInt(e.target.value, 10) || 2); setHasChanges(true); }}
+                        style={{ width: '100%', marginTop: '0.2rem', padding: '0.4rem', borderRadius: '4px', border: '1px solid rgba(0,217,255,0.3)', background: 'rgba(0,0,0,0.35)', color: '#fff' }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {activeVisionModel === 'openrouter' && (
+                  <div style={{ marginTop: '0.6rem', display: 'grid', gap: '0.5rem', maxWidth: '480px' }}>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.75)' }}>Primary model ID</label>
+                      <input
+                        type="text"
+                        value={openrouterModel}
+                        onChange={(e) => { setOpenrouterModel(e.target.value); setHasChanges(true); }}
+                        style={{ width: '100%', marginTop: '0.2rem', padding: '0.4rem', borderRadius: '4px', border: '1px solid rgba(0,217,255,0.3)', background: 'rgba(0,0,0,0.35)', color: '#fff' }}
+                        placeholder="qwen/qwen3-vl-32b-instruct"
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.75)' }}>Fallback model ID (optional, leave empty for strict mode)</label>
+                      <input
+                        type="text"
+                        value={openrouterModelFallback}
+                        onChange={(e) => { setOpenrouterModelFallback(e.target.value); setHasChanges(true); }}
+                        style={{ width: '100%', marginTop: '0.2rem', padding: '0.4rem', borderRadius: '4px', border: '1px solid rgba(0,217,255,0.3)', background: 'rgba(0,0,0,0.35)', color: '#fff' }}
+                        placeholder=""
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* CMP Settings */}

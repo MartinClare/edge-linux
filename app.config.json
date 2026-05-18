@@ -10,40 +10,245 @@
     "defaultAnalysisMode": "gemini",
     "deepVisionEnabled": true
   },
+  "vision": {
+    "activeModel": "openrouter",
+    "openrouterModel": "qwen/qwen3-vl-32b-instruct",
+    "openrouterModelFallback": "",
+    "localVllmApiUrl": "http://127.0.0.1:8002",
+    "localVllmModel": "qwen3VL32B-8bit",
+    "localVllmTimeoutMs": 600000,
+    "maxConcurrentLocalVllm": 1,
+    "yoloGate": {
+      "enabled": false,
+      "mode": "person_or_change_or_interval",
+      "minConfidence": 0.35,
+      "alwaysAnalyzeEverySec": 300,
+      "sceneChangeEnabled": true,
+      "sceneChangeThreshold": 0.08,
+      "fallbackOnYoloError": "periodic",
+      "classesOfInterest": [
+        "person",
+        "worker",
+        "no_hardhat",
+        "no-hardhat",
+        "no_helmet",
+        "no-helmet",
+        "no_vest",
+        "no-vest",
+        "no_hardhat_no_vest",
+        "hardhat",
+        "helmet",
+        "vest",
+        "crane",
+        "excavator",
+        "truck",
+        "forklift",
+        "machinery"
+      ]
+    },
+    "maxNewTokens": 1536,
+    "cmpReporting": {
+      "heartbeatIntervalSec": 60,
+      "onlyReportElevated": true,
+      "minAnalysisReportIntervalSec": 60
+    }
+  },
   "rtsp": {
     "cameras": [
       {
         "id": "camera1",
-        "name": "site_b_03",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_03",
-        "browserUrl": "http://fnnas.cccl4s.com:8554/site_b_03",
+        "name": "lan_cam_01",
+        "url": "rtsp://admin:123456@192.168.10.2:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.2",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
       },
       {
         "id": "camera2",
-        "name": "site_b_08",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_08",
-        "browserUrl": "http://fnnas.cccl4s.com:8554/site_b_08",
+        "name": "lan_cam_02",
+        "url": "rtsp://admin:123456@192.168.10.3:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.3",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
       },
       {
         "id": "camera3",
-        "name": "site_b_09",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_b_09",
-        "browserUrl": "http://fnnas.cccl4s.com:8554/site_b_09",
+        "name": "lan_cam_03",
+        "url": "rtsp://admin:123456@192.168.10.5:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.5",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false
       },
       {
         "id": "camera4",
-        "name": "site_a_02",
-        "url": "rtsp://fnnas.cccl4s.com:8554/site_a_02",
-        "browserUrl": "http://fnnas.cccl4s.com:8554/site_a_02",
+        "name": "lan_cam_04",
+        "url": "rtsp://admin:123456@192.168.10.6:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.6",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera5",
+        "name": "lan_cam_05",
+        "url": "rtsp://admin:123456@192.168.10.7:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.7",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera6",
+        "name": "lan_cam_06",
+        "url": "rtsp://admin:123456@192.168.10.8:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.8",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera7",
+        "name": "lan_cam_07",
+        "url": "rtsp://admin:123456@192.168.10.9:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.9",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera8",
+        "name": "lan_cam_08",
+        "url": "rtsp://admin:123456@192.168.10.10:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.10",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera9",
+        "name": "lan_cam_09",
+        "url": "rtsp://admin:123456@192.168.10.11:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.11",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera10",
+        "name": "lan_cam_10",
+        "url": "rtsp://admin:123456@192.168.10.12:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.12",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera11",
+        "name": "lan_cam_11",
+        "url": "rtsp://admin:123456@192.168.10.13:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.13",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera12",
+        "name": "lan_cam_12",
+        "url": "rtsp://admin:123456@192.168.10.14:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.14",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera13",
+        "name": "lan_cam_13",
+        "url": "rtsp://admin:123456@192.168.10.15:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.15",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera14",
+        "name": "lan_cam_14",
+        "url": "rtsp://admin:123456@192.168.10.16:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.16",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera15",
+        "name": "lan_cam_15",
+        "url": "rtsp://admin:123456@192.168.10.17:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.17",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera16",
+        "name": "lan_cam_16",
+        "url": "rtsp://admin:123456@192.168.10.19:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.19",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera17",
+        "name": "lan_cam_17",
+        "url": "rtsp://admin:123456@192.168.10.20:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.20",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera18",
+        "name": "lan_cam_18",
+        "url": "rtsp://admin:123456@192.168.10.21:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.21",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera19",
+        "name": "lan_cam_19",
+        "url": "rtsp://admin:123456@192.168.10.22:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.22",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera20",
+        "name": "lan_cam_20",
+        "url": "rtsp://admin:123456@192.168.10.23:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.23",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera21",
+        "name": "lan_cam_21",
+        "url": "rtsp://admin:123456@192.168.10.24:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.24",
+        "enabled": true,
+        "tailscaleUrl": "",
+        "useTailscale": false
+      },
+      {
+        "id": "camera22",
+        "name": "lan_cam_22",
+        "url": "rtsp://admin:123456@192.168.10.30:554/Streaming/Channels/101",
+        "browserUrl": "http://192.168.10.30",
         "enabled": true,
         "tailscaleUrl": "",
         "useTailscale": false

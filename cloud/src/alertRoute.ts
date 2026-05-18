@@ -8,13 +8,8 @@
 
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import { 
-  OPENROUTER_API_KEY, 
-  OPENROUTER_API_URL, 
-  MODEL_NAME, 
-  getAlertAnalysisPrompt,
-  type SupportedLanguage
-} from './openRouterClient.js';
+import { type SupportedLanguage } from './visionClient.js';
+import { analyzeAlertBuffer } from './analyzeCore.js';
 import { 
   MAX_FILE_SIZE_BYTES, 
   MAX_FILE_SIZE_MB, 
@@ -137,81 +132,12 @@ router.post('/analyze-alerts', (req: Request, res: Response) => {
     }
 
     try {
-      // Convert buffer to base64
-      const imageBase64 = buffer.toString('base64');
-      const imageDataUrl = `data:${mimetype};base64,${imageBase64}`;
-
-      // Get alert-specific prompt
-      const alertPrompt = getAlertAnalysisPrompt(language);
       const requestTimestamp = new Date().toISOString();
-      console.log(`[${requestTimestamp}] 🚀 Sending OpenRouter API request for ALERTS (language: ${language}, size: ${(buffer.length / 1024).toFixed(1)} KB)`);
-      const startTime = Date.now();
-
-      // Call OpenRouter API
-      const openRouterResponse = await fetch(OPENROUTER_API_URL, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'http://localhost:3001',
-          'X-Title': 'Axon Vision Alert API',
-        },
-        body: JSON.stringify({
-          model: MODEL_NAME,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: alertPrompt,
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: imageDataUrl,
-                  },
-                },
-              ],
-            },
-          ],
-        }),
-      });
-
-      const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-      
-      if (!openRouterResponse.ok) {
-        console.error(`[${requestTimestamp}] ❌ OpenRouter API failed for ALERTS (${openRouterResponse.status}, took ${duration}s)`);
-        const contentType = openRouterResponse.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const errorData = await openRouterResponse.json() as { error?: { message?: string } };
-          console.error('OpenRouter API error:', errorData);
-          throw new Error(errorData.error?.message || `API error: ${openRouterResponse.status}`);
-        } else {
-          const errorText = await openRouterResponse.text();
-          console.error('OpenRouter non-JSON response:', errorText.substring(0, 200));
-          throw new Error(`API error: ${openRouterResponse.status}`);
-        }
-      }
-
-      const result = await openRouterResponse.json() as {
-        choices?: Array<{
-          message?: {
-            content?: string;
-          };
-        }>;
-      };
-      console.log(`[${requestTimestamp}] ✅ OpenRouter API success for ALERTS (took ${duration}s)`);
-      console.log('OpenRouter alert response:', JSON.stringify(result, null, 2));
-      
-      const responseText = result.choices?.[0]?.message?.content;
-      
-      if (!responseText) {
-        console.error('Empty response from API:', result);
-        throw new Error('Empty response from AI model');
-      }
-
-      // Parse alert response
+      console.log(
+        `[${requestTimestamp}] Local vision ALERTS (language: ${language}, size: ${(buffer.length / 1024).toFixed(1)} KB)`,
+      );
+      const responseText = await analyzeAlertBuffer(buffer, language);
+      if (!responseText) throw new Error('Empty response from local vision');
       const alertResult = parseAlertResponse(responseText);
 
       const response: AlertResponse = {
@@ -227,12 +153,7 @@ router.post('/analyze-alerts', (req: Request, res: Response) => {
         ? error.message 
         : 'An unexpected error occurred during alert analysis.';
       
-      let userMessage = `Alert analysis failed: ${errorMessage}`;
-      if (errorMessage.includes('API key')) {
-        userMessage = 'API configuration error. Please check your OpenRouter API key.';
-      } else if (errorMessage.includes('quota') || errorMessage.includes('429')) {
-        userMessage = 'API quota exceeded. Please try again later.';
-      }
+      const userMessage = `Alert analysis failed: ${errorMessage}. Ensure the local vision server is running.`;
       
       const response: AlertResponse = {
         success: false,
