@@ -209,6 +209,9 @@ router.put('/config', (req: Request, res: Response) => {
       r.cameras = mergeRtspCameras(r.cameras, rtsp.cameras);
       if ('fpsLimit' in rtsp) r.fpsLimit = rtsp.fpsLimit;
       if ('geminiInterval' in rtsp) r.geminiInterval = rtsp.geminiInterval;
+      if ('schedule' in rtsp) {
+        r.schedule = mergeSection(r.schedule, rtsp.schedule);
+      }
       if ('autoStart' in rtsp) r.autoStart = rtsp.autoStart;
     }
 
