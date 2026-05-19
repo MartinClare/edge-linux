@@ -184,7 +184,7 @@ function parseEvaluatorResponse(responseText: string): EvaluatorOutput {
  */
 export async function analyzeImageBuffer(
   jpegBuffer: Buffer,
-  language: SupportedLanguage = 'en',
+  language: SupportedLanguage = 'zh-TW',
   requestOptions?: AnalyzeRequestOptions,
 ): Promise<SafetyAnalysisResult> {
   return withVisionConcurrency(() =>
@@ -194,7 +194,7 @@ export async function analyzeImageBuffer(
 
 async function analyzeImageBufferUnlimited(
   jpegBuffer: Buffer,
-  language: SupportedLanguage = 'en',
+  language: SupportedLanguage = 'zh-TW',
   requestOptions?: AnalyzeRequestOptions,
 ): Promise<SafetyAnalysisResult> {
   const vision = buildVisionForRequest(requestOptions?.visionModel);
@@ -265,7 +265,7 @@ async function analyzeImageBufferUnlimited(
  */
 export async function analyzeAlertBuffer(
   jpegBuffer: Buffer,
-  language: SupportedLanguage = 'en',
+  language: SupportedLanguage = 'zh-TW',
   requestOptions?: { visionModel?: VisionActiveModel },
 ): Promise<string> {
   return withVisionConcurrency(async () => {

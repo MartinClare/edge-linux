@@ -196,7 +196,7 @@ def _analyze_with_cloud(frame_jpeg: bytes) -> Optional[dict]:
         resp = requests.post(
             analyze_url,
             files={"image": ("frame.jpg", frame_jpeg, "image/jpeg")},
-            data={"language": "en"},
+            data={"language": "zh-TW"},
             timeout=45,
         )
         if not resp.ok:

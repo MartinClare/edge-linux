@@ -5,15 +5,15 @@ const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 /**
  * Text classifier model.
  *
- * Default: qwen/qwen3.5-9b  — works in HK region, fast, good at structured JSON.
+ * Default: qwen/qwen3.5-flash-02-23  — cheapest fast text model.
  * Google Gemini models are region-blocked in HK.
  *
  * Override via CLASSIFIER_MODEL env var.
  */
 const CLASSIFIER_MODEL =
-  process.env.CLASSIFIER_MODEL?.trim() || "qwen/qwen3-vl-32b-instruct";
+  process.env.CLASSIFIER_MODEL?.trim() || "qwen/qwen3.5-flash-02-23";
 const CLASSIFIER_FALLBACK_MODEL =
-  process.env.CLASSIFIER_FALLBACK_MODEL?.trim() || "qwen/qwen3.5-flash-02-23";
+  (process.env.CLASSIFIER_FALLBACK_MODEL ?? "").trim();
 
 export type Classification = {
   type: IncidentType;
@@ -107,6 +107,9 @@ Risk rules:
 - machinery_hazard → "high" only when edge clearly reports machinery in immediate danger range of a confirmed person
 - fall_risk        → "high" when person is confirmed fallen/collapsed/injured on the ground
 - smoking          → "high" when edge clearly reports a person actively smoking AND peopleCount > 0
+
+Language rule:
+- All natural-language text values in output JSON MUST be Traditional Chinese (繁體中文), especially the "reasoning" field.
 
 Return STRICT JSON only:
 {
@@ -395,6 +398,10 @@ async function classifyWithLLM(analysis: AnalysisPayload): Promise<Classificatio
     const isBlocked = status === 403 || msg.includes("banned") || msg.includes("not available in your region");
     if (!isBlocked) {
       console.error(`[LLM-Classifier] API error ${status ?? "unknown"}:`, err);
+      return [];
+    }
+    if (!CLASSIFIER_FALLBACK_MODEL || CLASSIFIER_FALLBACK_MODEL === CLASSIFIER_MODEL) {
+      console.warn("[LLM-Classifier] Primary model blocked and no fallback configured.");
       return [];
     }
     console.warn(`[LLM-Classifier] Primary model blocked; retrying with ${CLASSIFIER_FALLBACK_MODEL}`);

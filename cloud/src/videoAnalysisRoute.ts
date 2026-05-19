@@ -61,7 +61,7 @@ router.post('/analyze-video', (req: Request, res: Response) => {
     }
 
     const { buffer, mimetype, originalname } = req.file;
-    const language = (req.body?.language as SupportedLanguage) || 'en';
+    const language = (req.body?.language as SupportedLanguage) || 'zh-TW';
     const sampleEvery = parseInt(req.body?.sampleEvery) || 5; // Frame sampling for YOLO
     const geminiInterval = parseInt(req.body?.geminiInterval) || 10; // Seconds between Gemini checks
 

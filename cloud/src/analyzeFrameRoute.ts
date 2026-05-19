@@ -24,7 +24,7 @@ router.post('/analyze-frame', async (req: Request, res: Response) => {
       });
     }
 
-    const lang = (language as SupportedLanguage) || 'en';
+    const lang = (language as SupportedLanguage) || 'zh-TW';
     const detections = yoloDetections || [];
 
     console.log(`🤖 Analyzing frame ${frameNumber} at ${Number(timestamp).toFixed(2)}s...`);

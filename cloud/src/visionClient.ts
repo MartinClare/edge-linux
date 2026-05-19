@@ -340,7 +340,7 @@ If there is not enough information for a category, set issues and recommendation
  * @param language - The language code ('en' or 'zh-TW')
  * @returns The complete prompt with language instruction
  */
-export function getSafetyAnalysisPrompt(language: SupportedLanguage = 'en'): string {
+export function getSafetyAnalysisPrompt(language: SupportedLanguage = 'zh-TW'): string {
   const languageInstruction = LANGUAGE_INSTRUCTIONS[language] || LANGUAGE_INSTRUCTIONS['en'];
   
   // For Chinese, put language instruction at the BEGINNING and END for emphasis
@@ -352,7 +352,7 @@ export function getSafetyAnalysisPrompt(language: SupportedLanguage = 'en'): str
 }
 
 // Default export for backward compatibility
-export const SAFETY_ANALYSIS_PROMPT = getSafetyAnalysisPrompt('en');
+export const SAFETY_ANALYSIS_PROMPT = getSafetyAnalysisPrompt('zh-TW');
 
 /**
  * Simplified alert-focused prompt for faster analysis
@@ -495,7 +495,7 @@ Return STRICT JSON (no markdown):
  * @param language - The language code ('en' or 'zh-TW')
  * @returns The complete alert prompt with language instruction
  */
-export function getAlertAnalysisPrompt(language: SupportedLanguage = 'en'): string {
+export function getAlertAnalysisPrompt(language: SupportedLanguage = 'zh-TW'): string {
   const languageInstruction = LANGUAGE_INSTRUCTIONS[language] || LANGUAGE_INSTRUCTIONS['en'];
   
   if (language === 'zh-TW') {

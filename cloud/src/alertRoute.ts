@@ -111,7 +111,7 @@ router.post('/analyze-alerts', (req: Request, res: Response) => {
     }
 
     const { buffer, mimetype } = req.file;
-    const language = (req.body?.language as SupportedLanguage) || 'en';
+    const language = (req.body?.language as SupportedLanguage) || 'zh-TW';
 
     // Validate MIME type
     if (!ALLOWED_MIME_TYPES.includes(mimetype as typeof ALLOWED_MIME_TYPES[number])) {

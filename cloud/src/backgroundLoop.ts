@@ -58,7 +58,7 @@ function tryStartPendingAnalyses(cfg: Record<string, unknown>): void {
     activeAnalysisCount++;
     void (async () => {
       try {
-        const result = await analyzeImageBuffer(pending.frame, 'en', {
+        const result = await analyzeImageBuffer(pending.frame, 'zh-TW', {
           yoloDetections: pending.yoloDetections,
           yoloGate: pending.yoloGate,
         });

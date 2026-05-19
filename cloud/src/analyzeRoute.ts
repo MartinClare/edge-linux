@@ -75,7 +75,7 @@ router.post('/analyze-image', (req: Request, res: Response) => {
     console.log(
       `Processing image: ${originalname}, size: ${(size / 1024).toFixed(2)} KB, type: ${mimetype}`,
     );
-    const language = (req.body?.language as SupportedLanguage) || 'en';
+    const language = (req.body?.language as SupportedLanguage) || 'zh-TW';
     const rawVm = req.body?.visionModel as string | undefined;
     const visionModel = isVisionActiveModel(rawVm) ? rawVm : undefined;
 

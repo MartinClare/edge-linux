@@ -21,7 +21,7 @@ const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 /**
  * Vision model for image re-analysis and edge description verification.
  *
- * Default: qwen/qwen2.5-vl-72b-instruct
+ * Default: qwen/qwen3-vl-32b-instruct
  *   — Multimodal (vision + text), works in HK region.
  *   — Google Gemini models are region-blocked in HK.
  *
@@ -29,8 +29,6 @@ const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
  */
 const VISION_MODEL =
   process.env.VISION_MODEL?.trim() || "qwen/qwen3-vl-32b-instruct";
-const VISION_FALLBACK_MODEL =
-  process.env.VISION_FALLBACK_MODEL?.trim() || "qwen/qwen2.5-vl-72b-instruct";
 
 /**
  * Thinking budget for the vision model (Gemini 3 Flash reasoning tokens).
@@ -84,6 +82,9 @@ Risk rules:
 - If edge claims PPE violation (missing hardhat/vest) but you see workers WITH proper PPE → set detected: false
 - If edge claims PPE violation but view is unclear, distant, or cab-obstructed → set detected: false
 - Only set detected: true for ppe_violation when you CAN clearly see missing hardhat or vest
+
+Language rule:
+- All natural-language text values in output JSON MUST be Traditional Chinese (繁體中文), including "reasoning", "incorrectClaims", and "summary".
 
 Return STRICT JSON only — no markdown fences, no commentary outside the JSON:
 {
@@ -218,25 +219,13 @@ export async function verifyWithVision(
   };
 
   let text = "";
-  let usedModel = VISION_MODEL;
+  const usedModel = VISION_MODEL;
   try {
     text = await callModel(VISION_MODEL);
   } catch (err) {
-    const status = (err as { status?: number }).status;
-    const msg = err instanceof Error ? err.message.toLowerCase() : "";
-    const isBlocked = status === 403 || msg.includes("banned") || msg.includes("not available in your region");
-    if (!isBlocked) {
-      console.error("[VisionVerifier] Network/API error calling vision API:", err);
-      return null;
-    }
-    console.warn(`[VisionVerifier] Primary model blocked; retrying with ${VISION_FALLBACK_MODEL}`);
-    try {
-      text = await callModel(VISION_FALLBACK_MODEL);
-      usedModel = VISION_FALLBACK_MODEL;
-    } catch (fallbackErr) {
-      console.error("[VisionVerifier] Fallback model also failed:", fallbackErr);
-      return null;
-    }
+    // Strict policy: no fallback model for vision verification.
+    console.error("[VisionVerifier] Vision API call failed (no fallback configured):", err);
+    return null;
   }
 
   if (!text) return null;

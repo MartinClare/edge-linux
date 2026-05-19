@@ -74,7 +74,7 @@ router.post('/analyze-video-file-stream', (req: Request, res: Response) => {
 
   const sampleEveryNum = parseInt(sampleEvery) || 5;
   const geminiIntervalNum = parseInt(geminiInterval) || 10;
-  const lang = (language as SupportedLanguage) || 'en';
+  const lang = (language as SupportedLanguage) || 'zh-TW';
 
   (async () => {
     try {
